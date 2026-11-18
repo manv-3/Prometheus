@@ -299,10 +299,11 @@ TEST(HomeostasisEngineTest, LargeDtClampedToFiveSeconds) {
     // Pass dt = 100.0s (e.g. system suspended)
     auto next = engine.update(state, p, 100.0f);
 
-    // Total processed time must be capped to max_total_dt_seconds (5.0s)
-    EXPECT_NEAR(next.dwell_time_seconds, 15.0f, 0.001f);
+    // Total processed time is capped to max_total_dt_seconds (5.0s) and state remains valid
     EXPECT_GE(next.energy, 0.0f);
     EXPECT_LE(next.energy, 1.0f);
+    // Dwell time is preserved untouched by HomeostasisEngine (Runtime Coordinator owns dwell time)
+    EXPECT_FLOAT_EQ(next.dwell_time_seconds, 10.0f);
 }
 
 // 13. Configuration Denominator and Range Validation
@@ -416,7 +417,7 @@ TEST(HomeostasisEngineTest, SubstepDurationGuaranteeEnforcedInConfig) {
     auto next = engine.update(state, p, 2.0f);
     EXPECT_GE(next.energy, 0.0f);
     EXPECT_LE(next.energy, 1.0f);
-    EXPECT_NEAR(next.dwell_time_seconds, 2.0f, 0.001f);
+    EXPECT_FLOAT_EQ(next.dwell_time_seconds, 0.0f);
 }
 
 // 17. NaN and Infinity in Incoming State Sanitized Conservatively
@@ -553,17 +554,17 @@ TEST(HomeostasisEngineTest, DwellTimeSafetyAndOverflowGuard) {
     HomeostasisEngine engine;
     auto p = make_valid_pressure(0.5f);
 
-    // Negative dwell time sanitized to 0, then advanced by dt (1.0)
+    // Negative dwell time sanitized to 0.0f and preserved
     OrganismState s_neg;
     s_neg.dwell_time_seconds = -10.0f;
     auto r1 = engine.update(s_neg, p, 1.0f);
-    EXPECT_FLOAT_EQ(r1.dwell_time_seconds, 1.0f);
+    EXPECT_FLOAT_EQ(r1.dwell_time_seconds, 0.0f);
 
-    // NaN dwell time sanitized to 0, then advanced by dt (1.0)
+    // NaN dwell time sanitized to 0.0f and preserved
     OrganismState s_nan;
     s_nan.dwell_time_seconds = std::numeric_limits<float>::quiet_NaN();
     auto r2 = engine.update(s_nan, p, 1.0f);
-    EXPECT_FLOAT_EQ(r2.dwell_time_seconds, 1.0f);
+    EXPECT_FLOAT_EQ(r2.dwell_time_seconds, 0.0f);
 
     // Extremely large dwell time clamped to MAX_DWELL_SECONDS (~10 years)
     OrganismState s_huge;
@@ -571,4 +572,17 @@ TEST(HomeostasisEngineTest, DwellTimeSafetyAndOverflowGuard) {
     auto r3 = engine.update(s_huge, p, 1.0f);
     EXPECT_LE(r3.dwell_time_seconds, 315360000.0f);
     EXPECT_FALSE(std::isinf(r3.dwell_time_seconds));
+}
+
+// 23. Regression Test: Dwell Time Not Incremented by HomeostasisEngine (Coordinator Ownership)
+TEST(HomeostasisEngineTest, DwellTimeNotIncrementedByHomeostasis) {
+    HomeostasisEngine engine;
+    auto p = make_valid_pressure(0.3f);
+
+    OrganismState state;
+    state.dwell_time_seconds = 7.5f;
+
+    auto next = engine.update(state, p, 2.0f);
+    // HomeostasisEngine must preserve dwell_time_seconds without incrementing
+    EXPECT_FLOAT_EQ(next.dwell_time_seconds, 7.5f);
 }

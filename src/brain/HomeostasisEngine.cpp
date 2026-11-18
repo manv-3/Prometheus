@@ -191,8 +191,8 @@ common::OrganismState HomeostasisEngine::single_substep(
 ) const noexcept {
     common::OrganismState next = state;
 
-    // Advance dwell time in current behaviour
-    next.dwell_time_seconds = state.dwell_time_seconds + dt;
+    // Dwell time and behaviour are preserved untouched (Runtime Coordinator is sole owner of dwell timer)
+    next.dwell_time_seconds = state.dwell_time_seconds;
     next.current_behaviour = state.current_behaviour;
 
     // 1. Effective Pressure with Adaptation Dampening
@@ -353,10 +353,8 @@ common::OrganismState HomeostasisEngine::update(
         state_iter = single_substep(state_iter, resolved.value, resolved.is_fresh, dt_sub, is_user_active);
     }
 
-    // Dwell time advances exactly by the processed capped dt (avoids float accumulation drift)
-    // with overflow clamp
-    constexpr float MAX_DWELL_SECONDS = 315360000.0f;
-    state_iter.dwell_time_seconds = std::min(sanitized_state.dwell_time_seconds + capped_dt, MAX_DWELL_SECONDS);
+    // Dwell time is preserved untouched (Runtime Coordinator is the sole owner of dwell timer)
+    state_iter.dwell_time_seconds = sanitized_state.dwell_time_seconds;
 
     return state_iter;
 }

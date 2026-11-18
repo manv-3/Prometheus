@@ -17,6 +17,7 @@ add_library(prometheus_brain
     src/brain/EmaFilter.cpp
     src/brain/PressureEstimator.cpp
     src/brain/HomeostasisEngine.cpp
+    src/brain/BehaviourFSM.cpp
 )
 
 target_include_directories(prometheus_brain PUBLIC
