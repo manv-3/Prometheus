@@ -5,36 +5,174 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Compiler Warnings (Rigorous warnings enabled, Werror postponed until clean build verified)
-if (MSVC)
+option(PROMETHEUS_BUILD_TESTS "Build GoogleTest unit tests" ON)
+
+# ---------------------------------------------------------------------------
+# Compiler warnings
+# /WX (warnings-as-errors) is enabled once the Phase 0 skeleton builds clean.
+# Until then /W4 without /WX so stubs compile without noise.
+# ---------------------------------------------------------------------------
+if(MSVC)
     add_compile_options(/W4 /permissive- /utf-8)
+    # Uncomment when clean: add_compile_options(/WX)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Core Prometheus Brain Library
-add_library(prometheus_brain
+# ---------------------------------------------------------------------------
+# Qt 6 — required for ui and app modules
+# ---------------------------------------------------------------------------
+find_package(Qt6 REQUIRED COMPONENTS Core Quick Qml)
+qt_standard_project_setup()
+
+# ---------------------------------------------------------------------------
+# Shared include root (all modules use the same include/ tree)
+# ---------------------------------------------------------------------------
+set(PROMETHEUS_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_core
+# Coordinator, scheduler, snapshot publication, shared types.
+# Must NOT contain biology rules or Win32 calls.
+# ---------------------------------------------------------------------------
+add_library(prometheus_core STATIC
+    src/core/RuntimeCoordinator.cpp
+    src/core/SimulationThread.cpp
+    src/core/RuntimeScheduler.cpp
+)
+target_include_directories(prometheus_core PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+target_link_libraries(prometheus_core PUBLIC Qt6::Core)
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_sensory
+# HostObservation collection and normalization (pure interface layer).
+# Platform-specific code lives in prometheus_platform_windows.
+# ---------------------------------------------------------------------------
+add_library(prometheus_sensory STATIC
+    src/sensory/SyntheticProvider.cpp
+    src/sensory/SensorWorker.cpp
+)
+target_include_directories(prometheus_sensory PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+target_link_libraries(prometheus_sensory PUBLIC prometheus_core)
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_platform_windows
+# Win32 PDH, GlobalMemoryStatusEx, optional NVML.
+# Only built on Windows.
+# ---------------------------------------------------------------------------
+if(WIN32)
+    add_library(prometheus_platform_windows STATIC
+        src/platform/windows/CpuMonitor.cpp
+        src/platform/windows/MemoryMonitor.cpp
+    )
+    target_include_directories(prometheus_platform_windows PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+    target_link_libraries(prometheus_platform_windows PUBLIC prometheus_sensory pdh)
+endif()
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_brain
+# OrganismState update, pressure estimate, Behaviour selection.
+# Must NOT include Qt or Windows headers.
+# ---------------------------------------------------------------------------
+add_library(prometheus_brain STATIC
     src/brain/EmaFilter.cpp
     src/brain/PressureEstimator.cpp
     src/brain/HomeostasisEngine.cpp
-    src/brain/BehaviourFSM.cpp
+    src/brain/BehaviourFSM.cpp          # Dev B's real implementation (PR #2)
+)
+target_include_directories(prometheus_brain PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+# No Qt, no platform dependency — stdlib + shared types only.
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_metabolism
+# ComputeBudget, QualityTier, hard limits, degrade/recover pacing.
+# Must NOT own visuals or persistence.
+# ---------------------------------------------------------------------------
+add_library(prometheus_metabolism STATIC
+    src/metabolism/Metabolism.cpp
+)
+target_include_directories(prometheus_metabolism PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+# No Qt, no platform dependency.
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_body
+# Bounded particle simulation, runs within ComputeBudget.
+# Must NOT read telemetry or touch DB.
+# ---------------------------------------------------------------------------
+add_library(prometheus_body STATIC
+    src/body/ParticleSystem.cpp
+)
+target_include_directories(prometheus_body PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+target_link_libraries(prometheus_body PUBLIC prometheus_core)
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_memory
+# SQLite identity, events, checkpoints.
+# Must NOT make real-time simulation decisions.
+# ---------------------------------------------------------------------------
+add_library(prometheus_memory STATIC
+    src/memory/MemoryManager.cpp
+)
+target_include_directories(prometheus_memory PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+target_link_libraries(prometheus_memory PUBLIC prometheus_core)
+# SQLite: add sqlite3 target once D6 (SQLite integration method) is resolved.
+# target_link_libraries(prometheus_memory PRIVATE sqlite3)
+
+# ---------------------------------------------------------------------------
+# Module: prometheus_ui
+# QML + thin ViewModel over immutable OrganismSnapshot.
+# Must NOT hold mutable access to engine internals.
+# ---------------------------------------------------------------------------
+add_library(prometheus_ui STATIC
+    src/ui/OrganismViewModel.cpp
+)
+target_include_directories(prometheus_ui PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+target_link_libraries(prometheus_ui PUBLIC prometheus_core Qt6::Core Qt6::Quick Qt6::Qml)
+
+# ---------------------------------------------------------------------------
+# Executable: prometheus_app
+# Entry point, lifecycle.
+# Dependency order: app -> ui -> core -> {sensory, brain, metabolism, body, memory}
+# ---------------------------------------------------------------------------
+qt_add_executable(prometheus_app
+    src/app/main.cpp
+)
+qt_add_qml_module(prometheus_app
+    URI Prometheus
+    VERSION 1.0
+    QML_FILES
+        resources/qml/Main.qml
+)
+target_include_directories(prometheus_app PRIVATE ${PROMETHEUS_INCLUDE_DIR})
+target_link_libraries(prometheus_app PRIVATE
+    prometheus_ui
+    prometheus_core
+    prometheus_brain
+    prometheus_metabolism
+    prometheus_body
+    prometheus_memory
+    prometheus_sensory
+    $<$<BOOL:${WIN32}>:prometheus_platform_windows>
+    Qt6::Core
+    Qt6::Quick
+    Qt6::Qml
 )
 
-target_include_directories(prometheus_brain PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+if(PROMETHEUS_BUILD_TESTS)
+    enable_testing()
 
-# Test Harness: Genuine GoogleTest via FetchContent
-enable_testing()
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.15.2
+    )
+    # Prevent overriding the parent project's runtime library settings on MSVC
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
 
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG        v1.15.2
-)
-# For Windows MSVC: Prevent overriding the parent project's runtime library settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-add_subdirectory(tests)
+    add_subdirectory(tests)
+endif()
