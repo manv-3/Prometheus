@@ -23,3 +23,25 @@ target_link_libraries(prometheus_body_tests PRIVATE
     GTest::gtest_main
 )
 gtest_discover_tests(prometheus_body_tests)
+
+# ---- Metabolism tests ----
+add_executable(prometheus_metabolism_tests
+    metabolism/test_metabolism.cpp
+)
+target_link_libraries(prometheus_metabolism_tests PRIVATE
+    prometheus_metabolism
+    GTest::gtest
+    GTest::gtest_main
+)
+gtest_discover_tests(prometheus_metabolism_tests)
+
+# ---- Memory tests ----
+add_executable(prometheus_memory_tests
+    memory/test_memory_manager.cpp
+)
+target_link_libraries(prometheus_memory_tests PRIVATE
+    prometheus_memory
+    GTest::gtest
+    GTest::gtest_main
+)
+gtest_discover_tests(prometheus_memory_tests)
