@@ -1,36 +1,67 @@
 #include "prometheus/core/RuntimeCoordinator.hpp"
+#include "prometheus/core/SimulationThread.hpp"
+#include "prometheus/sensory/SyntheticProvider.hpp"
+#include "prometheus/sensory/RealSensorProvider.hpp"
+
+#include <QMetaType>
+
+// Must be at global scope, not inside a namespace
+Q_DECLARE_METATYPE(std::shared_ptr<const prometheus::common::OrganismSnapshot>)
 
 namespace prometheus::core {
 
-// STUB — Phase 0 skeleton.
-// Real implementation: TASK-2.5 (wire sensor worker, simulation thread,
-// persistence worker; publish snapshots via queued signal).
-//
-// ActiveEmergencies ownership: this coordinator is the ONLY place that mutates
-// the active_emergencies_ state. BehaviourFSM::evaluate() returns
-// BehaviourDecision.detected_emergencies and cleared_emergencies deltas;
-// the coordinator applies them here each tick (BehaviourFSM design invariant 2).
+struct RuntimeCoordinator::State {
+    SnapshotCallback callback;
+    std::unique_ptr<SimulationThread> simThread;
+    brain::ActiveEmergencies activeEmergencies{};
+};
 
-RuntimeCoordinator::RuntimeCoordinator() = default;
+RuntimeCoordinator::RuntimeCoordinator()
+    : state_(std::make_unique<State>())
+{
+    qRegisterMetaType<std::shared_ptr<const common::OrganismSnapshot>>();
+}
+
 RuntimeCoordinator::~RuntimeCoordinator() { stop(); }
 
-void RuntimeCoordinator::start() {
-    // TODO: start sensor worker, simulation thread, persistence worker
+void RuntimeCoordinator::setSnapshotCallback(SnapshotCallback callback) {
+    state_->callback = std::move(callback);
+}
+
+void RuntimeCoordinator::start(bool syntheticMode) {
+    if (state_->simThread) return; // already running
+
+    // Choose telemetry provider based on mode
+    std::shared_ptr<sensory::SensoryProvider> provider;
+    if (syntheticMode) {
+        provider = std::make_shared<sensory::SyntheticProvider>("ramp-up");
+    } else {
+        provider = std::make_shared<sensory::RealSensorProvider>();
+    }
+
+    // Create simulation thread with snapshot publishing callback
+    state_->simThread = std::make_unique<SimulationThread>(
+        state_->callback,
+        provider
+    );
+
+    state_->simThread->start();
 }
 
 void RuntimeCoordinator::stop() {
-    // TODO: signal threads to stop, join, save final checkpoint
+    if (state_->simThread) {
+        state_->simThread->stop();
+        state_->simThread.reset();
+    }
 }
 
 std::shared_ptr<const common::OrganismSnapshot> RuntimeCoordinator::latestSnapshot() const noexcept {
-    // TODO: atomic load of published snapshot
+    // TODO: atomic load of published snapshot (Phase 2 TASK-2.5)
     return std::make_shared<const common::OrganismSnapshot>();
 }
 
 const brain::ActiveEmergencies& RuntimeCoordinator::activeEmergencies() const noexcept {
-    // TODO: return the live-mutated emergencies struct
-    static const brain::ActiveEmergencies kEmpty{};
-    return kEmpty;
+    return state_->activeEmergencies;
 }
 
 } // namespace prometheus::core
