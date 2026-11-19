@@ -77,19 +77,15 @@ int OrganismViewModel::qualityTier() const noexcept {
 }
 
 int OrganismViewModel::activeParticles() const noexcept {
-    // Phase 1: not yet in snapshot contract — return max_particles as proxy
-    // until TASK-2.5 adds activeParticles to OrganismSnapshot.
-    return static_cast<int>(snapshot_->budget.max_particles);
+    return static_cast<int>(snapshot_->active_particles);
 }
 
 bool OrganismViewModel::syntheticMode() const noexcept {
-    // TODO: add telemetry_source field to OrganismSnapshot in Phase 2 (TASK-3.4).
-    // For now assume real telemetry unless running with --synthetic flag.
-    return false;
+    return snapshot_->telemetry_source == common::TelemetrySource::Synthetic;
 }
 
 bool OrganismViewModel::dormant() const noexcept {
-    return snapshot_->state.current_behaviour == common::Behaviour::Dormant;
+    return snapshot_->dormant;
 }
 
 } // namespace prometheus::ui
