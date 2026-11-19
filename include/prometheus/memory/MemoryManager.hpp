@@ -1,6 +1,7 @@
 #pragma once
 
 #include "prometheus/common/OrganismState.hpp"
+#include <memory>
 #include <string>
 
 namespace prometheus::memory {
