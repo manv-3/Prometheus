@@ -10,7 +10,7 @@ namespace prometheus::metabolism {
 Metabolism::Metabolism(const TierBudget& tiers) noexcept
     : tiers_(tiers) {}
 
-common::TierBudget Metabolism::defaultTiers() noexcept {
+TierBudget Metabolism::defaultTiers() noexcept {
     // All values are initial, untuned placeholders.
     TierBudget t;
 
