@@ -12,3 +12,8 @@ cmake-build-*/
 *.lib
 *.ilk
 *.log
+
+# SQLite test databases
+*.db
+*.db-wal
+*.db-shm
