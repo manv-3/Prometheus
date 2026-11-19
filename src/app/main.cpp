@@ -2,9 +2,9 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QString>
+#include <QMetaObject>
 
 #include "prometheus/ui/OrganismViewModel.hpp"
-#include "prometheus/core/SimulationThread.hpp"
 #include "prometheus/core/RuntimeCoordinator.hpp"
 
 // Register the snapshot type for queued cross-thread signals.
@@ -24,19 +24,24 @@ int main(int argc, char* argv[]) {
     // ---- ViewModel (GUI thread owner) ----
     prometheus::ui::OrganismViewModel viewModel;
 
-    // ---- Simulation thread ----
-    // Publishes snapshots via a queued connection to the ViewModel.
+    // ---- Runtime Coordinator ----
+    // Owns the simulation thread, sensor worker, brain, metabolism, body.
     // The render clock is completely independent (TASK-1.8 / REQ-BODY-02).
-    prometheus::core::SimulationThread simThread(
+    prometheus::core::RuntimeCoordinator coordinator;
+
+    // Wire snapshot publishing: simulation thread → (queued) → ViewModel
+    coordinator.setSnapshotCallback(
         [&viewModel](std::shared_ptr<const prometheus::common::OrganismSnapshot> snap) {
             // QMetaObject::invokeMethod ensures the slot runs on the GUI thread
-            // even though the lambda executes on the simulation thread.
             QMetaObject::invokeMethod(&viewModel, "onSnapshotPublished",
                 Qt::QueuedConnection,
                 Q_ARG(std::shared_ptr<const prometheus::common::OrganismSnapshot>,
                       std::move(snap)));
         }
     );
+
+    // Start the organism (synthetic or real telemetry)
+    coordinator.start(syntheticMode);
 
     // ---- QML engine ----
     QQmlApplicationEngine engine;
@@ -56,14 +61,12 @@ int main(int argc, char* argv[]) {
     engine.load(mainQml);
 
     if (engine.rootObjects().isEmpty()) {
+        coordinator.stop();
         return -1;
     }
 
-    // ---- Start simulation (independent of render clock) ----
-    simThread.start();
-
     const int result = app.exec();
 
-    simThread.stop();
+    coordinator.stop();
     return result;
 }
