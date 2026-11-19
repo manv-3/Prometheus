@@ -57,9 +57,9 @@ TEST(ParticleSystemTest, DeactivateSwapsWithLast) {
     ASSERT_NE(p1, nullptr);
     ASSERT_NE(p2, nullptr);
 
-    // Mark particle at index 0 with a sentinel value
-    ps.data()[0].x = 99.0f;
-    ps.data()[2].x = 77.0f; // last active
+    // Mark particles with sentinel values via the mutable activate() return
+    p0->x = 99.0f;
+    p2->x = 77.0f; // last active
 
     // Deactivating index 0 should swap index 2 into slot 0
     ps.deactivate(0);
