@@ -103,8 +103,11 @@ struct SimulationThread::Impl {
             // 6. Update homeostasis drives (preserves behaviour + dwell_time)
             state = homeostasis.update(state, pressure, dt, obs.is_user_active);
 
-            // 7. Compute budget from observation + state
-            common::ComputeBudget budget = metabolism.calculate(obs, state);
+            // 7. Compute budget from behaviour + smoothed pressure + dt
+            //    The pressure → behaviour → budget → workload chain is completed here.
+            common::ComputeBudget budget = metabolism.calculate(
+                obs, state, pressure.smoothed_pressure, dt
+            );
 
             // 8. Update particle simulation within budget
             particles.update(budget, dt);
