@@ -129,6 +129,16 @@ add_library(prometheus_memory STATIC
 )
 target_include_directories(prometheus_memory PUBLIC ${PROMETHEUS_INCLUDE_DIR})
 # Memory uses shared types from include/ — does NOT link to core
+# SQLite for persistence (TASK-2.4)
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    target_link_libraries(prometheus_memory PRIVATE SQLite::SQLite3)
+else()
+    # Fallback: manual path for MinGW bundled SQLite
+    target_include_directories(prometheus_memory PRIVATE "E:/qt6/Tools/mingw1310_64/opt/include")
+    target_link_directories(prometheus_memory PRIVATE "E:/qt6/Tools/mingw1310_64/opt/lib")
+    target_link_libraries(prometheus_memory PRIVATE sqlite3)
+endif()
 # SQLite: add sqlite3 target once D6 (SQLite integration method) is resolved.
 # target_link_libraries(prometheus_memory PRIVATE sqlite3)
 

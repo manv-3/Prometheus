@@ -41,7 +41,7 @@
         "CMAKE_CXX_STANDARD": "20",
         "CMAKE_CXX_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/g++.exe",
         "CMAKE_C_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/gcc.exe",
-        "CMAKE_PREFIX_PATH": "E:/qt6/6.12.0/mingw_64",
+        "CMAKE_PREFIX_PATH": "E:/qt6/6.12.0/mingw_64;E:/qt6/Tools/mingw1310_64/opt",
         "PROMETHEUS_BUILD_TESTS": "ON"
       }
     },
@@ -56,7 +56,7 @@
         "CMAKE_CXX_STANDARD": "20",
         "CMAKE_CXX_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/g++.exe",
         "CMAKE_C_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/gcc.exe",
-        "CMAKE_PREFIX_PATH": "E:/qt6/6.12.0/mingw_64",
+        "CMAKE_PREFIX_PATH": "E:/qt6/6.12.0/mingw_64;E:/qt6/Tools/mingw1310_64/opt",
         "PROMETHEUS_BUILD_TESTS": "OFF"
       }
     }
