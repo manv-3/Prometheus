@@ -5,37 +5,37 @@
 #include "prometheus/brain/BehaviourFSM.hpp"
 #include <memory>
 #include <functional>
+#include <string>
 
 namespace prometheus::core {
 
 /**
- * @brief Runs Brain + Metabolism + Body on a dedicated thread at ~1 Hz decision
- *        rate and ~10-30 Hz simulation rate (budget-controlled).
+ * @brief Runs the full organism simulation pipeline on a dedicated thread.
  *
- * Owns the full simulation pipeline internally:
+ * Pipeline per tick:
  *   SensorWorker → PressureEstimator → BehaviourFSM → HomeostasisEngine
  *                → Metabolism → ParticleSystem → OrganismSnapshot
  *
- * The coordinator (this thread) is the exclusive owner of:
- *   - dwell_time_seconds advancement (BehaviourFSM design invariant 2)
- *   - ActiveEmergencies mutation (applies detected/cleared deltas from FSM)
+ * Also handles:
+ *   - Identity load from SQLite before the first tick (REQ-MEMORY-01)
+ *   - Checkpoint saves on behaviour transitions and clean shutdown (REQ-MEMORY-02)
+ *   - Real dormancy: parks the loop, heartbeats, wakes on pressure recovery (REQ-DORMANCY-01)
+ *   - Budget-driven tick rate: sleeps for 1/budget.target_sim_hz between ticks
+ *   - Synthetic-mode labelling on every published snapshot (REQ-UI-02)
  *
- * Publishes an immutable OrganismSnapshot after each tick via a
- * caller-supplied callback. The callback is invoked on the simulation thread;
- * use a queued signal or atomic swap to hand off to the GUI thread.
- *
- * The render clock is completely independent — a rendered frame must never
- * trigger a simulation step (REQ-BODY-02).
+ * Coordinator invariants (BehaviourFSM design notes):
+ *   - dwell_time_seconds is advanced here, NOT in HomeostasisEngine
+ *   - ActiveEmergencies is mutated here from FSM decision deltas
  */
 class SimulationThread {
 public:
     using SnapshotCallback = std::function<void(std::shared_ptr<const common::OrganismSnapshot>)>;
 
-    /// Construct with a telemetry provider (synthetic or real).
-    /// If nullptr, defaults to a SyntheticProvider("steady-low").
     explicit SimulationThread(
         SnapshotCallback onSnapshot = nullptr,
-        std::shared_ptr<sensory::SensoryProvider> provider = nullptr
+        std::shared_ptr<sensory::SensoryProvider> provider = nullptr,
+        bool syntheticMode = false,
+        const std::string& dbPath = "prometheus.db"
     );
     ~SimulationThread();
 
