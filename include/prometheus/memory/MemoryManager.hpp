@@ -3,6 +3,7 @@
 #include "prometheus/common/OrganismState.hpp"
 #include <memory>
 #include <string>
+#include <cstdint>
 
 namespace prometheus::memory {
 
@@ -14,15 +15,29 @@ enum class SaveTrigger : uint8_t {
     CleanShutdown
 };
 
+/// Current schema version. Bump on breaking schema changes.
+static constexpr int32_t kSchemaVersion = 1;
+
+/**
+ * @brief Result of a loadCheckpoint operation.
+ */
+struct LoadResult {
+    common::OrganismState state{};
+    bool found{false};      // true if a valid checkpoint was loaded
+    bool corrupted{false};  // true if the DB was corrupt and we fell back to new
+    int32_t schemaVersion{0};
+};
+
 /**
  * @brief Persists organism identity, events, and checkpoints to SQLite.
  *
- * All DB work runs on the persistence worker thread — never on the GUI or
- * render thread. Enqueues checkpoint requests via a bounded queue.
+ * All DB work runs on the calling thread (the persistence worker in Phase 3).
+ * Never called from the GUI or render thread.
  *
- * Schema versioned; migration and corrupt-state recovery handled at startup.
+ * Schema is versioned; migration and corrupt-state recovery handled at startup.
+ * Checkpoint writes use transactions + atomic replacement.
  *
- * STATUS: STUB — owned by Dev A (TASK-2.4).
+ * STATUS: Phase 2 — TASK-2.4 real implementation.
  */
 class MemoryManager {
 public:
@@ -33,15 +48,28 @@ public:
     MemoryManager& operator=(const MemoryManager&) = delete;
 
     /// Load the last valid checkpoint before simulation starts.
-    /// Returns a freshly initialised state if none exists or on corruption.
-    [[nodiscard]] common::OrganismState loadCheckpoint();
+    /// Returns found=false if none exists; corrupted=true if DB was corrupt.
+    [[nodiscard]] LoadResult loadCheckpoint();
 
-    /// Enqueue a checkpoint write (non-blocking; handled by persistence worker).
+    /// Save a checkpoint. Uses a transaction; atomic replacement.
+    /// @param state Current organism state.
+    /// @param trigger Why the checkpoint is being saved (for the events log).
     void saveCheckpoint(const common::OrganismState& state, SaveTrigger trigger);
 
+    /// Get the current schema version of the database (0 if not yet created).
+    [[nodiscard]] int32_t schemaVersion() const noexcept { return schemaVersion_; }
+
+    /// Close the database. Called by destructor; safe to call manually.
+    void close();
+
 private:
+    void openDatabase();
+    void createSchema();
+    void migrateSchema();
+
     struct Impl;
     std::unique_ptr<Impl> impl_;
+    int32_t schemaVersion_{0};
 };
 
 } // namespace prometheus::memory
