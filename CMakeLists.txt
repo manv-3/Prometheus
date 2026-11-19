@@ -41,7 +41,15 @@ add_library(prometheus_core STATIC
     src/core/RuntimeScheduler.cpp
 )
 target_include_directories(prometheus_core PUBLIC ${PROMETHEUS_INCLUDE_DIR})
-target_link_libraries(prometheus_core PUBLIC Qt6::Core)
+# Core links to submodules so SimulationThread can drive the full pipeline:
+# sensor -> brain -> metabolism -> body -> snapshot
+target_link_libraries(prometheus_core PUBLIC
+    Qt6::Core
+    prometheus_sensory
+    prometheus_brain
+    prometheus_metabolism
+    prometheus_body
+)
 
 # ---------------------------------------------------------------------------
 # Module: prometheus_sensory
@@ -51,9 +59,13 @@ target_link_libraries(prometheus_core PUBLIC Qt6::Core)
 add_library(prometheus_sensory STATIC
     src/sensory/SyntheticProvider.cpp
     src/sensory/SensorWorker.cpp
+    src/sensory/RealSensorProvider.cpp
 )
 target_include_directories(prometheus_sensory PUBLIC ${PROMETHEUS_INCLUDE_DIR})
-target_link_libraries(prometheus_sensory PUBLIC prometheus_core)
+# Sensory uses shared types from include/ — does NOT link to core
+# (dependency direction: core → sensory, not the reverse)
+# Sensory links to platform_windows for RealSensorProvider (adapter for CpuMonitor/MemoryMonitor)
+target_link_libraries(prometheus_sensory PUBLIC $<$<BOOL:${WIN32}>:prometheus_platform_windows>)
 
 # ---------------------------------------------------------------------------
 # Module: prometheus_platform_windows
@@ -66,7 +78,9 @@ if(WIN32)
         src/platform/windows/MemoryMonitor.cpp
     )
     target_include_directories(prometheus_platform_windows PUBLIC ${PROMETHEUS_INCLUDE_DIR})
-    target_link_libraries(prometheus_platform_windows PUBLIC prometheus_sensory pdh)
+    # Platform uses shared types from include/ — does NOT link to sensory
+    # (dependency direction: sensory → platform, not the reverse)
+    target_link_libraries(prometheus_platform_windows PRIVATE pdh)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -103,7 +117,7 @@ add_library(prometheus_body STATIC
     src/body/ParticleSystem.cpp
 )
 target_include_directories(prometheus_body PUBLIC ${PROMETHEUS_INCLUDE_DIR})
-target_link_libraries(prometheus_body PUBLIC prometheus_core)
+# Body uses shared types from include/ — does NOT link to core
 
 # ---------------------------------------------------------------------------
 # Module: prometheus_memory
@@ -114,7 +128,7 @@ add_library(prometheus_memory STATIC
     src/memory/MemoryManager.cpp
 )
 target_include_directories(prometheus_memory PUBLIC ${PROMETHEUS_INCLUDE_DIR})
-target_link_libraries(prometheus_memory PUBLIC prometheus_core)
+# Memory uses shared types from include/ — does NOT link to core
 # SQLite: add sqlite3 target once D6 (SQLite integration method) is resolved.
 # target_link_libraries(prometheus_memory PRIVATE sqlite3)
 
@@ -125,8 +139,10 @@ target_link_libraries(prometheus_memory PUBLIC prometheus_core)
 # ---------------------------------------------------------------------------
 add_library(prometheus_ui STATIC
     src/ui/OrganismViewModel.cpp
+    include/prometheus/ui/OrganismViewModel.hpp
 )
 target_include_directories(prometheus_ui PUBLIC ${PROMETHEUS_INCLUDE_DIR})
+set_target_properties(prometheus_ui PROPERTIES AUTOMOC ON)
 target_link_libraries(prometheus_ui PUBLIC prometheus_core Qt6::Core Qt6::Quick Qt6::Qml)
 
 # ---------------------------------------------------------------------------
@@ -144,19 +160,40 @@ qt_add_qml_module(prometheus_app
         resources/qml/Main.qml
 )
 target_include_directories(prometheus_app PRIVATE ${PROMETHEUS_INCLUDE_DIR})
-target_link_libraries(prometheus_app PRIVATE
-    prometheus_ui
-    prometheus_core
-    prometheus_brain
-    prometheus_metabolism
-    prometheus_body
-    prometheus_memory
-    prometheus_sensory
-    $<$<BOOL:${WIN32}>:prometheus_platform_windows>
-    Qt6::Core
-    Qt6::Quick
-    Qt6::Qml
-)
+
+# prometheus_ui must be whole-archive so the moc-generated vtable and signal
+# implementations are pulled in from the static library. MSVC uses /WHOLEARCHIVE.
+if(MSVC)
+    target_link_libraries(prometheus_app PRIVATE
+        prometheus_core
+        prometheus_brain
+        prometheus_metabolism
+        prometheus_body
+        prometheus_memory
+        prometheus_sensory
+        $<$<BOOL:${WIN32}>:prometheus_platform_windows>
+        /WHOLEARCHIVE:prometheus_ui
+        Qt6::Core
+        Qt6::Quick
+        Qt6::Qml
+    )
+else()
+    target_link_libraries(prometheus_app PRIVATE
+        prometheus_core
+        prometheus_brain
+        prometheus_metabolism
+        prometheus_body
+        prometheus_memory
+        prometheus_sensory
+        $<$<BOOL:${WIN32}>:prometheus_platform_windows>
+        -Wl,--whole-archive
+        prometheus_ui
+        -Wl,--no-whole-archive
+        Qt6::Core
+        Qt6::Quick
+        Qt6::Qml
+    )
+endif()
 
 # ---------------------------------------------------------------------------
 # Tests

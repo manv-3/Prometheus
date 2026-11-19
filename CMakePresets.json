@@ -9,7 +9,7 @@
     {
       "name": "windows-msvc-debug",
       "displayName": "Windows MSVC Debug",
-      "description": "Debug build with MSVC on Windows",
+      "description": "Debug build with MSVC on Windows (requires Qt MSVC kit)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/windows-msvc-debug",
       "cacheVariables": {
@@ -21,12 +21,42 @@
     {
       "name": "windows-msvc-release",
       "displayName": "Windows MSVC Release",
-      "description": "Release build with MSVC on Windows",
+      "description": "Release build with MSVC on Windows (requires Qt MSVC kit)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/windows-msvc-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_STANDARD": "20",
+        "PROMETHEUS_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "windows-mingw-debug",
+      "displayName": "Windows MinGW Debug (Qt 6.12 MinGW)",
+      "description": "Debug build with MinGW GCC 13 + Qt 6.12 MinGW kit. Use when no Qt MSVC kit is installed.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-mingw-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_CXX_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/g++.exe",
+        "CMAKE_C_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/gcc.exe",
+        "CMAKE_PREFIX_PATH": "E:/qt6/6.12.0/mingw_64",
+        "PROMETHEUS_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "windows-mingw-release",
+      "displayName": "Windows MinGW Release (Qt 6.12 MinGW)",
+      "description": "Release build with MinGW GCC 13 + Qt 6.12 MinGW kit.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-mingw-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_CXX_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/g++.exe",
+        "CMAKE_C_COMPILER": "E:/qt6/Tools/mingw1310_64/bin/gcc.exe",
+        "CMAKE_PREFIX_PATH": "E:/qt6/6.12.0/mingw_64",
         "PROMETHEUS_BUILD_TESTS": "OFF"
       }
     }
@@ -39,15 +69,26 @@
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc-release"
+    },
+    {
+      "name": "windows-mingw-debug",
+      "configurePreset": "windows-mingw-debug"
+    },
+    {
+      "name": "windows-mingw-release",
+      "configurePreset": "windows-mingw-release"
     }
   ],
   "testPresets": [
     {
       "name": "windows-msvc-debug",
       "configurePreset": "windows-msvc-debug",
-      "output": {
-        "outputOnFailure": true
-      }
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-mingw-debug",
+      "configurePreset": "windows-mingw-debug",
+      "output": { "outputOnFailure": true }
     }
   ]
 }
