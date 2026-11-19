@@ -42,7 +42,9 @@ void RuntimeCoordinator::start(bool syntheticMode) {
     // Create simulation thread with snapshot publishing callback
     state_->simThread = std::make_unique<SimulationThread>(
         state_->callback,
-        provider
+        provider,
+        syntheticMode,
+        "prometheus.db"
     );
 
     state_->simThread->start();
