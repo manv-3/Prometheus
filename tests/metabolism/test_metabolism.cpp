@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "prometheus/metabolism/Metabolism.hpp"
 #include <algorithm>
+#include <optional>
 
 using prometheus::metabolism::Metabolism;
 using prometheus::metabolism::TierBudget;
@@ -215,4 +216,75 @@ TEST(MetabolismTest, ExploringReachesTier4WithDwellTime) {
     m.calculate({}, exploring, 0.05f, 0.02f); // enough dwell
     EXPECT_EQ(m.currentTier(), QualityTier::Tier4_Optimal);
     EXPECT_EQ(m.currentTier(), QualityTier::Tier4_Optimal);
+}
+
+// 13. Fixed-tier mode: pinned tier ignores behaviour and pressure
+TEST(MetabolismTest, FixedTierIgnoresBehaviourAndPressure) {
+    Metabolism m;
+
+    // Pin to Tier2
+    m.setFixedTier(QualityTier::Tier2_Constrained);
+    EXPECT_TRUE(m.isFixedMode());
+    EXPECT_EQ(m.currentTier(), QualityTier::Tier2_Constrained);
+
+    // Dormant behaviour would normally give Tier0 — fixed mode overrides it
+    OrganismState dormant = makeState(Behaviour::Dormant);
+    auto budget = m.calculate({}, dormant, 0.0f, 0.05f);
+    EXPECT_EQ(budget.tier, QualityTier::Tier2_Constrained);
+    EXPECT_EQ(m.currentTier(), QualityTier::Tier2_Constrained);
+
+    // Max pressure would normally force Tier0 — fixed mode overrides it
+    OrganismState exploring = makeState(Behaviour::Exploring);
+    auto budget2 = m.calculate({}, exploring, 0.99f, 0.05f);
+    EXPECT_EQ(budget2.tier, QualityTier::Tier2_Constrained);
+}
+
+// 14. Fixed-tier mode: budget still clamped to HardLimits
+TEST(MetabolismTest, FixedTierBudgetStillClamped) {
+    Metabolism m;
+    m.setFixedTier(QualityTier::Tier4_Optimal);
+
+    OrganismState idle = makeState(Behaviour::Idle);
+    for (int i = 0; i < 20; ++i) {
+        auto budget = m.calculate({}, idle, static_cast<float>(i) / 20.0f, 0.05f);
+        EXPECT_LE(budget.max_particles, ComputeBudget::HARD_MAX_PARTICLES);
+        EXPECT_LE(budget.target_sim_hz, ComputeBudget::HARD_MAX_SIM_HZ);
+    }
+}
+
+// 15. Clearing fixed-tier restores adaptive mode
+TEST(MetabolismTest, ClearFixedTierRestoresAdaptiveMode) {
+    Metabolism m;
+    m.setFixedTier(QualityTier::Tier1_Critical);
+    EXPECT_TRUE(m.isFixedMode());
+
+    m.setFixedTier(std::nullopt);
+    EXPECT_FALSE(m.isFixedMode());
+
+    // Adaptive mode: Dormant behaviour should give Tier0 again
+    OrganismState dormant = makeState(Behaviour::Dormant);
+    auto budget = m.calculate({}, dormant, 0.0f, 0.05f);
+    EXPECT_EQ(budget.tier, QualityTier::Tier0_Dormant);
+}
+
+// 16. Fixed-tier mode produces constant particle count across varied pressures
+//     This is the core invariant for the benchmark baseline (REQ-BENCH-01)
+TEST(MetabolismTest, FixedTierProducesConstantParticleCount) {
+    Metabolism m;
+    m.setFixedTier(QualityTier::Tier3_Nominal);
+
+    OrganismState state = makeState(Behaviour::Idle);
+    uint32_t expectedParticles = 0;
+
+    for (int i = 0; i <= 10; ++i) {
+        float pressure = static_cast<float>(i) / 10.0f;
+        auto budget = m.calculate({}, state, pressure, 0.05f);
+        if (i == 0) {
+            expectedParticles = budget.max_particles;
+        } else {
+            // Particle count must be IDENTICAL across all pressures in fixed mode
+            EXPECT_EQ(budget.max_particles, expectedParticles)
+                << "particle count changed at pressure " << pressure;
+        }
+    }
 }
