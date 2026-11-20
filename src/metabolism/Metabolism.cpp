@@ -69,6 +69,17 @@ common::ComputeBudget Metabolism::clampToHardLimits(const common::ComputeBudget&
     return safe;
 }
 
+// ---- setFixedTier (TASK-4.2) ----
+
+void Metabolism::setFixedTier(std::optional<common::QualityTier> tier) noexcept {
+    fixedTier_ = tier;
+    if (tier.has_value()) {
+        // Snap the internal tracker so currentTier() reports the pinned value
+        currentTier_    = *tier;
+        secondsInTier_  = 0.0f;
+    }
+}
+
 // ---- Main calculation ----
 
 common::ComputeBudget Metabolism::calculate(
@@ -87,6 +98,12 @@ common::ComputeBudget Metabolism::calculate(
     // 3. Advance time in current tier
     if (dt > 0.0f) {
         secondsInTier_ += dt;
+    }
+
+    // Fixed-complexity mode (TASK-4.2): bypass all adaptive logic
+    if (fixedTier_.has_value()) {
+        currentTier_ = *fixedTier_;
+        return clampToHardLimits(tierToBudget(currentTier_));
     }
 
     // 4. Asymmetric pacing (REQ-BUDGET-03)

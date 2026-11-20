@@ -4,6 +4,7 @@
 #include "prometheus/common/OrganismState.hpp"
 #include "prometheus/common/ComputeBudget.hpp"
 #include <algorithm>
+#include <optional>
 
 namespace prometheus::metabolism {
 
@@ -46,6 +47,11 @@ struct MetabolismConfig {
  *   - Pressure provides a secondary cap: high pressure lowers the max tier
  *     even if the FSM hasn't transitioned yet.
  *
+ * Fixed-complexity mode (TASK-4.2 / REQ-BENCH-01):
+ *   When a fixed tier is set via setFixedTier(), calculate() ignores Behaviour
+ *   and pressure and always returns the budget for that tier.
+ *   This provides the baseline for the adaptive vs fixed benchmark comparison.
+ *
  * No Qt headers, no Windows headers. Depends only on shared types.
  */
 class Metabolism {
@@ -75,6 +81,16 @@ public:
     [[nodiscard]] common::QualityTier currentTier() const noexcept { return currentTier_; }
     [[nodiscard]] float secondsInTier() const noexcept { return secondsInTier_; }
 
+    /**
+     * @brief Fix the metabolism to a constant tier (TASK-4.2).
+     *        When set, calculate() bypasses all adaptive logic and always
+     *        returns the budget for this tier, clamped to HardLimits.
+     *        Pass std::nullopt to restore adaptive mode.
+     */
+    void setFixedTier(std::optional<common::QualityTier> tier) noexcept;
+    [[nodiscard]] std::optional<common::QualityTier> fixedTier() const noexcept { return fixedTier_; }
+    [[nodiscard]] bool isFixedMode() const noexcept { return fixedTier_.has_value(); }
+
     static TierBudget defaultTiers() noexcept;
 
 private:
@@ -94,6 +110,7 @@ private:
     MetabolismConfig config_;
     common::QualityTier currentTier_{common::QualityTier::Tier3_Nominal};
     float secondsInTier_{0.0f};
+    std::optional<common::QualityTier> fixedTier_; // nullopt = adaptive mode
 };
 
 } // namespace prometheus::metabolism
