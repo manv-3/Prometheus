@@ -4,6 +4,7 @@
 #include "prometheus/sensory/RealSensorProvider.hpp"
 
 #include <QMetaType>
+#include <optional>
 
 // Must be at global scope, not inside a namespace
 Q_DECLARE_METATYPE(std::shared_ptr<const prometheus::common::OrganismSnapshot>)
@@ -28,10 +29,10 @@ void RuntimeCoordinator::setSnapshotCallback(SnapshotCallback callback) {
     state_->callback = std::move(callback);
 }
 
-void RuntimeCoordinator::start(bool syntheticMode) {
+void RuntimeCoordinator::start(bool syntheticMode,
+                               std::optional<common::QualityTier> fixedTier) {
     if (state_->simThread) return; // already running
 
-    // Choose telemetry provider based on mode
     std::shared_ptr<sensory::SensoryProvider> provider;
     if (syntheticMode) {
         provider = std::make_shared<sensory::SyntheticProvider>("ramp-up");
@@ -39,12 +40,12 @@ void RuntimeCoordinator::start(bool syntheticMode) {
         provider = std::make_shared<sensory::RealSensorProvider>();
     }
 
-    // Create simulation thread with snapshot publishing callback
     state_->simThread = std::make_unique<SimulationThread>(
         state_->callback,
         provider,
         syntheticMode,
-        "prometheus.db"
+        "prometheus.db",
+        fixedTier
     );
 
     state_->simThread->start();
