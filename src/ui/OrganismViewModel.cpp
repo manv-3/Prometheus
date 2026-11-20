@@ -1,15 +1,12 @@
 #include "prometheus/ui/OrganismViewModel.hpp"
 #include <QMetaType>
 
-// Register shared_ptr<const OrganismSnapshot> for queued connections across threads.
-// This must be done before the first queued signal using this type fires.
 Q_DECLARE_METATYPE(std::shared_ptr<const prometheus::common::OrganismSnapshot>)
 
 namespace prometheus::ui {
 
 namespace {
 
-// Convert Behaviour enum to a display string for QML bindings.
 QString behaviourToString(common::Behaviour b) noexcept {
     switch (b) {
         case common::Behaviour::Dormant:   return QStringLiteral("Dormant");
@@ -34,58 +31,44 @@ OrganismViewModel::OrganismViewModel(QObject* parent)
 void OrganismViewModel::onSnapshotPublished(
     std::shared_ptr<const common::OrganismSnapshot> snapshot)
 {
-    // Must only be called on the GUI thread (enforced by queued connection).
     Q_ASSERT(snapshot != nullptr);
     snapshot_ = std::move(snapshot);
     emit snapshotChanged();
 }
 
-// ---- Property readers ----
-// All reads go through snapshot_ which is only written on the GUI thread,
-// so no lock is needed here.
+// ---- Drives ----
+float OrganismViewModel::energy()       const noexcept { return snapshot_->state.energy; }
+float OrganismViewModel::stress()       const noexcept { return snapshot_->state.stress; }
+float OrganismViewModel::health()       const noexcept { return snapshot_->state.health; }
+float OrganismViewModel::curiosity()    const noexcept { return snapshot_->state.curiosity; }
+float OrganismViewModel::adaptation()   const noexcept { return snapshot_->state.adaptation; }
+float OrganismViewModel::pressure()     const noexcept { return snapshot_->environmental_pressure; }
 
-float OrganismViewModel::energy() const noexcept {
-    return snapshot_->state.energy;
-}
-
-float OrganismViewModel::stress() const noexcept {
-    return snapshot_->state.stress;
-}
-
-float OrganismViewModel::health() const noexcept {
-    return snapshot_->state.health;
-}
-
-float OrganismViewModel::curiosity() const noexcept {
-    return snapshot_->state.curiosity;
-}
-
-float OrganismViewModel::adaptation() const noexcept {
-    return snapshot_->state.adaptation;
-}
-
-float OrganismViewModel::pressure() const noexcept {
-    return snapshot_->environmental_pressure;
-}
-
+// ---- Behaviour ----
 QString OrganismViewModel::behaviour() const noexcept {
     return behaviourToString(snapshot_->state.current_behaviour);
 }
 
+// ---- Budget / tier ----
 int OrganismViewModel::qualityTier() const noexcept {
     return static_cast<int>(snapshot_->budget.tier);
 }
 
-int OrganismViewModel::activeParticles() const noexcept {
-    return static_cast<int>(snapshot_->active_particles);
-}
+// ---- Simulation metrics ----
+int   OrganismViewModel::activeParticles() const noexcept { return static_cast<int>(snapshot_->active_particles); }
+float OrganismViewModel::measuredSimHz()   const noexcept { return snapshot_->measured_sim_hz; }
+float OrganismViewModel::simTimeSeconds()  const noexcept { return snapshot_->sim_time_seconds; }
 
+// ---- Host telemetry ----
+float OrganismViewModel::hostCpuPct()   const noexcept { return snapshot_->observation.cpu_load * 100.0f; }
+float OrganismViewModel::hostRamPct()   const noexcept { return snapshot_->observation.memory_pressure * 100.0f; }
+bool  OrganismViewModel::hostCpuValid() const noexcept { return snapshot_->observation.cpu_valid; }
+bool  OrganismViewModel::hostRamValid() const noexcept { return snapshot_->observation.memory_valid; }
+
+// ---- Flags ----
 bool OrganismViewModel::syntheticMode() const noexcept {
     return snapshot_->telemetry_source == common::TelemetrySource::Synthetic;
 }
-
-bool OrganismViewModel::dormant() const noexcept {
-    return snapshot_->dormant;
-}
+bool OrganismViewModel::dormant() const noexcept { return snapshot_->dormant; }
 
 } // namespace prometheus::ui
