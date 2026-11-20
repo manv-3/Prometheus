@@ -35,7 +35,8 @@ public:
         SnapshotCallback onSnapshot = nullptr,
         std::shared_ptr<sensory::SensoryProvider> provider = nullptr,
         bool syntheticMode = false,
-        const std::string& dbPath = "prometheus.db"
+        const std::string& dbPath = "prometheus.db",
+        std::optional<common::QualityTier> fixedTier = std::nullopt
     );
     ~SimulationThread();
 

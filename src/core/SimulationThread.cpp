@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <algorithm>
+#include <optional>
 
 namespace prometheus::core {
 
@@ -60,7 +61,8 @@ struct SimulationThread::Impl {
     Impl(SnapshotCallback cb,
          std::shared_ptr<sensory::SensoryProvider> prov,
          bool synthetic,
-         const std::string& dbPath)
+         const std::string& dbPath,
+         std::optional<common::QualityTier> fixedTier)
         : memoryManager(dbPath)
         , syntheticMode(synthetic)
         , onSnapshot(std::move(cb))
@@ -71,6 +73,11 @@ struct SimulationThread::Impl {
             provider = std::make_shared<sensory::SyntheticProvider>("ramp-up");
         }
         sensorWorker = std::make_unique<sensory::SensorWorker>(provider, 1000);
+
+        // Apply fixed-tier mode (TASK-4.2) — pins Metabolism to constant budget
+        if (fixedTier.has_value()) {
+            metabolism.setFixedTier(fixedTier);
+        }
     }
 
     // ---- Persistence helpers ----
@@ -238,13 +245,15 @@ SimulationThread::SimulationThread(
     SnapshotCallback onSnapshot,
     std::shared_ptr<sensory::SensoryProvider> provider,
     bool syntheticMode,
-    const std::string& dbPath
+    const std::string& dbPath,
+    std::optional<common::QualityTier> fixedTier
 )
     : impl_(std::make_unique<Impl>(
         std::move(onSnapshot),
         std::move(provider),
         syntheticMode,
-        dbPath))
+        dbPath,
+        fixedTier))
 {}
 
 SimulationThread::~SimulationThread() { stop(); }
