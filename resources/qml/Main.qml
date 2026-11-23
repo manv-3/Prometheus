@@ -37,19 +37,21 @@ Window {
     title: "PROMETHEUS"
 
     // ---- ViewModel ----
-    OrganismViewModel { id: vm }
+    // Note: 'vm' is injected into the root context by main.cpp (setContextProperty("vm", &viewModel)).
+    // Do NOT instantiate OrganismViewModel here.
 
     // ---- Keyboard: toggle diagnostics overlay ----
     property bool showDiag: false
-    Keys.onPressed: (event) => {
-        if (event.key === Qt.Key_D) { root.showDiag = !root.showDiag }
-    }
 
     // ---- Drag to reposition ----
     MouseArea {
         anchors.fill: parent
+        focus: true
         property point startPos
-        onPressed:  (m) => { startPos = Qt.point(m.x, m.y); root.requestActivate() }
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_D) { root.showDiag = !root.showDiag }
+        }
+        onPressed:  (m) => { startPos = Qt.point(m.x, m.y); root.requestActivate(); forceActiveFocus() }
         onPositionChanged: (m) => {
             if (pressed) { root.x += m.x - startPos.x; root.y += m.y - startPos.y }
         }

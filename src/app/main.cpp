@@ -80,8 +80,20 @@ int main(int argc, char* argv[]) {
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,
         &app,
-        []() { QCoreApplication::exit(-1); },
+        [](const QUrl& url) {
+            qCritical("[PROMETHEUS] Failed to load QML component: %s", qUtf8Printable(url.toString()));
+            QCoreApplication::exit(-1);
+        },
         Qt::QueuedConnection
+    );
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        [](const QList<QQmlError>& warnings) {
+            for (const auto& w : warnings) {
+                qWarning("[PROMETHEUS QML] %s", qUtf8Printable(w.toString()));
+            }
+        }
     );
     engine.load(mainQml);
 
