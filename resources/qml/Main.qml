@@ -5,21 +5,21 @@ import Prometheus
 /**
  * PROMETHEUS – Main organism window
  *
- * Transparent, frameless desktop window that visually represents the
- * organism's internal state in real time. Reads only from OrganismViewModel.
- * No simulation logic lives here — only visual bindings to snapshot data.
+ * The organism body is now the cat SVG asset.
+ * All behaviour-driven animations are applied via QML properties layered
+ * on top of the image — no SMIL animation required from the SVG itself.
  *
  * Visual mapping:
  *   Body size       ← energy       (larger = more energetic)
- *   Body colour     ← behaviour    (each state has a distinct colour)
- *   Body opacity    ← health       (dimmer = damaged health)
- *   Stress ring     ← stress       (pulsing orange/red halo)
- *   Particle dots   ← activeParticles (scattered dots around body)
- *   Adaptation glow ← adaptation   (soft golden outer ring)
- *   Curiosity sparks← curiosity    (small orbiting sparks when high)
- *   Dormancy state  ← dormant      (shrinks, greyscale, slow breathing)
+ *   Body opacity    ← health       (dimmer = damaged)
+ *   Hue rotation    ← behaviour    (colour shift per state)
+ *   Stress ring     ← stress       (pulsing halo)
+ *   Particle dots   ← activeParticles (orbiting dots)
+ *   Adaptation glow ← adaptation   (golden outer ring)
+ *   Dormancy        ← dormant      (shrinks, greyscale, slow breathing)
+ *   Bounce anim     ← curiosity    (subtle bounce when curious)
  *
- * Press 'D' to toggle the developer diagnostics overlay.
+ * Press D to toggle the developer diagnostics panel.
  * SYNTHETIC badge shown when syntheticMode == true (REQ-UI-02).
  */
 Window {
@@ -28,49 +28,46 @@ Window {
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
     color: "transparent"
 
-    width:  260
-    height: 260
+    width:  280
+    height: 300
     minimumWidth:  180
-    minimumHeight: 180
+    minimumHeight: 200
 
     visible: true
     title: "PROMETHEUS"
 
     // ---- ViewModel ----
-    // Note: 'vm' is injected into the root context by main.cpp (setContextProperty("vm", &viewModel)).
-    // Do NOT instantiate OrganismViewModel here.
+    OrganismViewModel { id: vm }
 
-    // ---- Keyboard: toggle diagnostics overlay ----
+    // ---- Keyboard: toggle diagnostics ----
     property bool showDiag: false
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_D) root.showDiag = !root.showDiag
+    }
 
     // ---- Drag to reposition ----
     MouseArea {
         anchors.fill: parent
-        focus: true
         property point startPos
-        Keys.onPressed: (event) => {
-            if (event.key === Qt.Key_D) { root.showDiag = !root.showDiag }
-        }
-        onPressed:  (m) => { startPos = Qt.point(m.x, m.y); root.requestActivate(); forceActiveFocus() }
+        onPressed:  (m) => { startPos = Qt.point(m.x, m.y); root.requestActivate() }
         onPositionChanged: (m) => {
             if (pressed) { root.x += m.x - startPos.x; root.y += m.y - startPos.y }
         }
     }
 
     // ================================================================
-    //  LAYER 1 — Adaptation glow (outermost, behind everything)
+    //  LAYER 1 — Adaptation glow (outermost golden ring)
     // ================================================================
     Rectangle {
-        id: adaptGlow
-        anchors.centerIn: parent
-        width:  bodyCircle.width + 32 + vm.adaptation * 24
-        height: width
+        anchors.centerIn: catBody
+        width:  catBody.width  + 20 + vm.adaptation * 30
+        height: catBody.height + 20 + vm.adaptation * 30
         radius: width / 2
-        color:  "transparent"
-        border.color: Qt.rgba(1.0, 0.85, 0.2, vm.adaptation * 0.45)
-        border.width: 3 + vm.adaptation * 5
+        color: "transparent"
+        border.color: Qt.rgba(1.0, 0.85, 0.15, vm.adaptation * 0.5)
+        border.width: 3 + vm.adaptation * 6
         visible: vm.adaptation > 0.05
-        Behavior on width { NumberAnimation { duration: 600; easing.type: Easing.OutSine } }
+        Behavior on width { NumberAnimation { duration: 800; easing.type: Easing.OutSine } }
     }
 
     // ================================================================
@@ -78,41 +75,38 @@ Window {
     // ================================================================
     Rectangle {
         id: pulseRing
-        anchors.centerIn: parent
-        width:  bodyCircle.width + 20
-        height: width
+        anchors.centerIn: catBody
+        width:  catBody.width  + 14
+        height: catBody.height + 14
         radius: width / 2
-        color:  "transparent"
-        border.color: Qt.rgba(1.0, 0.25, 0.05, vm.stress * 0.7)
-        border.width: 2 + vm.stress * 4
+        color: "transparent"
+        border.color: Qt.rgba(1.0, 0.2, 0.05, vm.stress * 0.75)
+        border.width: 2 + vm.stress * 5
         visible: vm.stress > 0.10
 
         SequentialAnimation on opacity {
             loops: Animation.Infinite
             NumberAnimation {
-                to: 0.15
-                duration: vm.dormant ? 3000 : (500 + (1.0 - vm.stress) * 700)
+                to: 0.1
+                duration: vm.dormant ? 4000 : (400 + (1.0 - vm.stress) * 700)
                 easing.type: Easing.InOutSine
             }
             NumberAnimation {
                 to: 1.0
-                duration: vm.dormant ? 3000 : (500 + (1.0 - vm.stress) * 700)
+                duration: vm.dormant ? 4000 : (400 + (1.0 - vm.stress) * 700)
                 easing.type: Easing.InOutSine
             }
         }
     }
 
     // ================================================================
-    //  LAYER 3 — Particle field  (activeParticles drives density)
+    //  LAYER 3 — Orbiting particle dots
     // ================================================================
-    // Render up to 12 visual dots whose positions orbit the body.
-    // Count shown is proportional to vm.activeParticles (max 300 → 12 dots).
-    // Positions are driven by continuous rotation — purely cosmetic.
     Item {
         id: particleField
-        anchors.centerIn: parent
-        width:  bodyCircle.width + 60
-        height: width
+        anchors.centerIn: catBody
+        width:  catBody.width  + 70
+        height: catBody.height + 70
 
         property int visibleDots: Math.min(12, Math.max(0,
             Math.round(vm.activeParticles / 25.0)))
@@ -121,130 +115,152 @@ Window {
             model: 12
             delegate: Rectangle {
                 property int   idx:    index
-                property real  angle:  (idx / 12.0) * 360.0 + particleField.rotation
-                property real  orbitR: (particleField.width / 2) - 6
-                                       + Math.sin(idx * 1.3) * 10
+                property real  orbit:  (particleField.width / 2) - 4 + Math.sin(idx * 1.4) * 10
+                property real  ang:    (idx / 12.0) * 360.0 + particleField.rotation
 
-                width:  visible ? (3 + (idx % 3))  : 0
+                width:  visible ? (3 + idx % 3) : 0
                 height: width
                 radius: width / 2
-
-                x: particleField.width  / 2 + orbitR * Math.cos(angle * Math.PI / 180) - width / 2
-                y: particleField.height / 2 + orbitR * Math.sin(angle * Math.PI / 180) - height / 2
+                x: particleField.width  / 2 + orbit * Math.cos(ang * Math.PI / 180) - width / 2
+                y: particleField.height / 2 + orbit * Math.sin(ang * Math.PI / 180) - height / 2
 
                 color: {
+                    if (vm.dormant) return Qt.rgba(0.5, 0.5, 0.55, 0.4)
                     switch (vm.behaviour) {
-                        case "Exploring": return Qt.rgba(0.4, 0.75, 1.0, 0.8)
-                        case "Observing": return Qt.rgba(0.7, 0.4,  1.0, 0.8)
-                        case "Stressed":  return Qt.rgba(1.0, 0.5,  0.1, 0.8)
-                        case "Resting":   return Qt.rgba(1.0, 0.95, 0.4, 0.8)
-                        case "Dormant":   return Qt.rgba(0.5, 0.5,  0.55, 0.5)
-                        default:          return Qt.rgba(0.5, 1.0,  0.6,  0.8)
+                        case "Exploring":  return Qt.rgba(0.3, 0.7, 1.0, 0.85)
+                        case "Observing":  return Qt.rgba(0.7, 0.3, 1.0, 0.85)
+                        case "Stressed":   return Qt.rgba(1.0, 0.4, 0.1, 0.85)
+                        case "Resting":    return Qt.rgba(1.0, 0.95, 0.3, 0.85)
+                        default:           return Qt.rgba(0.4, 1.0, 0.6, 0.85)
                     }
                 }
-
                 visible: index < particleField.visibleDots && !vm.dormant
                 Behavior on color { ColorAnimation { duration: 400 } }
             }
         }
 
-        // Rotate the whole field — speed scales with curiosity and tier
+        // Orbit rotation — speed driven by curiosity and tier
         NumberAnimation on rotation {
             from: 0; to: 360; loops: Animation.Infinite
             duration: vm.dormant ? 999999
-                : Math.max(3000, 15000 - vm.curiosity * 10000 - vm.qualityTier * 800)
+                : Math.max(4000, 18000 - vm.curiosity * 12000 - vm.qualityTier * 1000)
         }
     }
 
     // ================================================================
-    //  LAYER 4 — Main body circle
+    //  LAYER 4 — The cat SVG organism body
     // ================================================================
-    Rectangle {
-        id: bodyCircle
-        anchors.centerIn: parent
+    Item {
+        id: catBody
+        anchors {
+            horizontalCenter: parent.horizontalCenter
+            top: parent.top
+            topMargin: 10
+        }
 
-        // Size: driven by energy. Dormant = minimum. Thriving = maximum.
+        // Size driven by energy — dormant is smallest
         property real targetSize: vm.dormant
-            ? 54
-            : Math.round(54 + vm.energy * 72)
+            ? 90
+            : Math.round(90 + vm.energy * 80)
 
         width:  targetSize
         height: targetSize
-        radius: width / 2
 
-        // Health affects opacity — a damaged organism looks dim
-        opacity: 0.55 + vm.health * 0.45
+        // Smooth size changes
+        Behavior on width  { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
+        Behavior on height { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
 
-        // Colour encodes behaviour
-        color: {
-            if (vm.dormant) return Qt.rgba(0.22, 0.22, 0.26, 0.80)
-            switch (vm.behaviour) {
-                case "Exploring":  return Qt.rgba(0.15, 0.55, 1.00, 0.88)
-                case "Observing":  return Qt.rgba(0.55, 0.18, 0.92, 0.88)
-                case "Stressed":   return Qt.rgba(0.95, 0.35, 0.08, 0.88)
-                case "Resting":    return Qt.rgba(0.85, 0.80, 0.15, 0.88)
-                default:           return Qt.rgba(0.20, 0.80, 0.45, 0.88)  // Idle
-            }
-        }
-
-        Behavior on width   { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
-        Behavior on color   { ColorAnimation  { duration: 500 } }
+        // Dormancy greyscale + dim; health dims the image further
+        opacity: vm.dormant
+            ? 0.5
+            : (0.55 + vm.health * 0.45)
         Behavior on opacity { NumberAnimation { duration: 600 } }
 
-        // ---- Inner nucleus ----
-        // A small brighter circle whose radius tracks health
-        Rectangle {
-            anchors.centerIn: parent
-            width:  parent.width * (0.28 + vm.health * 0.22)
-            height: width
-            radius: width / 2
-            color:  Qt.lighter(parent.color, 1.5)
-            opacity: 0.6
-            Behavior on width { NumberAnimation { duration: 400 } }
+        // Greyscale filter when dormant using saturation = 0
+        layer.enabled:  vm.dormant
+        layer.effect: ShaderEffect {
+            property variant src: catBody
+            fragmentShader: "
+                varying highp vec2 qt_TexCoord0;
+                uniform sampler2D source;
+                void main() {
+                    vec4 c = texture2D(source, qt_TexCoord0);
+                    float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+                    gl_FragColor = vec4(g, g, g, c.a) * 0.75;
+                }
+            "
         }
 
-        // ---- State icon / label ----
-        Text {
-            anchors.centerIn: parent
-            text: {
-                if (vm.dormant)              return "💤"
+        // The cat SVG
+        Image {
+            id: catImage
+            anchors.fill: parent
+            source: "qrc:/Prometheus/resources/organism.svg"
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            antialiasing: true
+
+            // Colour tint overlay driven by behaviour (using Item + Rectangle blend)
+        }
+
+        // Behaviour colour tint (semi-transparent overlay blended on top)
+        Rectangle {
+            anchors.fill: catImage
+            radius: width / 2
+            opacity: vm.dormant ? 0.0 : 0.18
+            color: {
                 switch (vm.behaviour) {
-                    case "Exploring": return "✦"
-                    case "Stressed":  return "⚠"
-                    case "Resting":   return "♥"
-                    case "Observing": return "👁"
-                    default:          return "●"
+                    case "Exploring":  return "#2299ff"
+                    case "Observing":  return "#aa44ff"
+                    case "Stressed":   return "#ff5500"
+                    case "Resting":    return "#ffdd00"
+                    default:           return "#44cc77"   // Idle
                 }
             }
-            font.pixelSize: 14
-            color: "white"
-            opacity: 0.90
+            Behavior on color   { ColorAnimation { duration: 500 } }
+            Behavior on opacity { NumberAnimation { duration: 400 } }
+        }
+
+        // Curious bounce animation
+        SequentialAnimation on y {
+            running: vm.curiosity > 0.65 && !vm.dormant
+            loops: Animation.Infinite
+            NumberAnimation { to: -6; duration: 350; easing.type: Easing.OutQuad }
+            NumberAnimation { to:  0; duration: 350; easing.type: Easing.InQuad }
+            PauseAnimation   { duration: Math.max(200, 1200 - vm.curiosity * 1000) }
+        }
+
+        // Dormancy slow breathing scale
+        SequentialAnimation on scale {
+            running: vm.dormant
+            loops: Animation.Infinite
+            NumberAnimation { to: 0.95; duration: 2500; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 1.00; duration: 2500; easing.type: Easing.InOutSine }
         }
     }
 
     // ================================================================
-    //  LAYER 5 — Health bar (thin arc at the bottom of the body)
+    //  LAYER 5 — Health bar (below cat)
     // ================================================================
     Rectangle {
-        id: healthBarBg
         anchors {
-            horizontalCenter: parent.horizontalCenter
-            top: bodyCircle.bottom
+            horizontalCenter: catBody.horizontalCenter
+            top: catBody.bottom
             topMargin: 4
         }
-        width:  bodyCircle.width
+        width:  catBody.width * 0.85
         height: 4
         radius: 2
-        color:  Qt.rgba(1, 1, 1, 0.15)
+        color: Qt.rgba(1, 1, 1, 0.15)
 
         Rectangle {
             width:  parent.width * vm.health
             height: parent.height
             radius: parent.radius
             color: {
-                if (vm.health > 0.6) return Qt.rgba(0.3, 0.9, 0.4, 0.85)
-                if (vm.health > 0.3) return Qt.rgba(0.9, 0.75, 0.1, 0.85)
-                return Qt.rgba(0.9, 0.2, 0.1, 0.85)
+                if (vm.health > 0.6) return Qt.rgba(0.3, 0.9, 0.4, 0.9)
+                if (vm.health > 0.3) return Qt.rgba(0.9, 0.75, 0.1, 0.9)
+                return Qt.rgba(0.9, 0.2, 0.1, 0.9)
             }
             Behavior on width { NumberAnimation { duration: 400 } }
             Behavior on color { ColorAnimation  { duration: 400 } }
@@ -252,38 +268,25 @@ Window {
     }
 
     // ================================================================
-    //  LAYER 6 — Compact status strip (bottom-left)
+    //  LAYER 6 — Status strip (bottom-left)
     // ================================================================
     Column {
-        anchors {
-            left:   parent.left
-            bottom: parent.bottom
-            margins: 7
-        }
+        anchors { left: parent.left; bottom: parent.bottom; margins: 7 }
         spacing: 2
 
-        Text {
-            text: "⚡ " + Math.round(vm.energy    * 100) + "%"
-            font.pixelSize: 9; color: Qt.rgba(1, 1, 1, 0.75)
-        }
-        Text {
-            text: "🔥 " + Math.round(vm.stress    * 100) + "%"
-            font.pixelSize: 9; color: Qt.rgba(1, 1, 1, 0.75)
-        }
-        Text {
-            text: "T" + vm.qualityTier + "  " + vm.activeParticles + "p"
-            font.pixelSize: 9; color: Qt.rgba(1, 1, 1, 0.70)
-        }
+        Text { text: "⚡ " + Math.round(vm.energy    * 100) + "%"; font.pixelSize: 9; color: Qt.rgba(1,1,1,0.75) }
+        Text { text: "🔥 " + Math.round(vm.stress    * 100) + "%"; font.pixelSize: 9; color: Qt.rgba(1,1,1,0.75) }
+        Text { text: "T" + vm.qualityTier + "  " + vm.activeParticles + "p"; font.pixelSize: 9; color: Qt.rgba(1,1,1,0.70) }
     }
 
     // ================================================================
-    //  LAYER 7 — SYNTHETIC badge  (REQ-UI-02)
+    //  LAYER 7 — SYNTHETIC badge (REQ-UI-02)
     // ================================================================
     Rectangle {
         anchors { top: parent.top; right: parent.right; margins: 5 }
         width:  synLabel.implicitWidth + 8
         height: synLabel.implicitHeight + 4
-        color:  Qt.rgba(0.9, 0.7, 0.0, 0.88)
+        color: Qt.rgba(0.9, 0.7, 0.0, 0.88)
         radius: 3
         visible: vm.syntheticMode
 
@@ -297,15 +300,14 @@ Window {
     }
 
     // ================================================================
-    //  LAYER 8 — Developer diagnostics overlay  (press D to toggle)
+    //  LAYER 8 — Developer diagnostics panel (press D)
     // ================================================================
     Rectangle {
-        id: diagPanel
         visible: root.showDiag
-        anchors { top: parent.top; left: parent.left; margins: 0 }
+        anchors { top: parent.top; left: parent.left }
         width:  diagContent.implicitWidth  + 16
         height: diagContent.implicitHeight + 16
-        color:  Qt.rgba(0.0, 0.0, 0.0, 0.82)
+        color:  Qt.rgba(0.0, 0.0, 0.0, 0.84)
         radius: 6
 
         Column {
@@ -323,20 +325,14 @@ Window {
             Text { text: "Tier      " + vm.qualityTier;                        font.pixelSize: 9; color: "white" }
 
             Text { text: "── HOST ──"; font.pixelSize: 9; font.bold: true; color: "#aaaaff"; topPadding: 4 }
-            Text {
-                text: "CPU  " + (vm.hostCpuValid ? vm.hostCpuPct.toFixed(1) + "%" : "N/A")
-                font.pixelSize: 9; color: vm.hostCpuValid ? "white" : "#ff8888"
-            }
-            Text {
-                text: "RAM  " + (vm.hostRamValid ? vm.hostRamPct.toFixed(1) + "%" : "N/A")
-                font.pixelSize: 9; color: vm.hostRamValid ? "white" : "#ff8888"
-            }
+            Text { text: "CPU  " + (vm.hostCpuValid ? vm.hostCpuPct.toFixed(1) + "%" : "N/A"); font.pixelSize: 9; color: vm.hostCpuValid ? "white" : "#ff8888" }
+            Text { text: "RAM  " + (vm.hostRamValid ? vm.hostRamPct.toFixed(1) + "%" : "N/A"); font.pixelSize: 9; color: vm.hostRamValid ? "white" : "#ff8888" }
             Text { text: "Pressure " + (vm.pressure * 100).toFixed(1) + "%";  font.pixelSize: 9; color: "white" }
 
             Text { text: "── RUNTIME ──"; font.pixelSize: 9; font.bold: true; color: "#ffaaaa"; topPadding: 4 }
-            Text { text: "Particles " + vm.activeParticles;                     font.pixelSize: 9; color: "white" }
-            Text { text: "Sim Hz    " + vm.measuredSimHz.toFixed(1);            font.pixelSize: 9; color: "white" }
-            Text { text: "Age       " + vm.simTimeSeconds.toFixed(0) + "s";     font.pixelSize: 9; color: "white" }
+            Text { text: "Particles " + vm.activeParticles;                    font.pixelSize: 9; color: "white" }
+            Text { text: "Sim Hz    " + vm.measuredSimHz.toFixed(1);           font.pixelSize: 9; color: "white" }
+            Text { text: "Age       " + vm.simTimeSeconds.toFixed(0) + "s";    font.pixelSize: 9; color: "white" }
             Text {
                 text: vm.syntheticMode ? "● SYNTHETIC" : "● LIVE"
                 font.pixelSize: 9; font.bold: true
@@ -346,17 +342,13 @@ Window {
         }
     }
 
-    // ================================================================
-    //  Press 'D' hint (bottom-right corner, fades after 4s)
-    // ================================================================
+    // Press D hint
     Text {
-        id: diagHint
         anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
         text: "[D] diag"
         font.pixelSize: 8
-        color: Qt.rgba(1, 1, 1, 0.35)
+        color: Qt.rgba(1, 1, 1, 0.3)
         visible: !root.showDiag
-
         SequentialAnimation on opacity {
             running: true
             PauseAnimation { duration: 4000 }
