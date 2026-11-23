@@ -1,6 +1,6 @@
 import QtQuick
+import QtQuick
 import QtQuick.Window
-import Prometheus
 
 /**
  * PROMETHEUS – Main organism window
@@ -36,8 +36,8 @@ Window {
     visible: true
     title: "PROMETHEUS"
 
-    // ---- ViewModel ----
-    OrganismViewModel { id: vm }
+    // ---- ViewModel is exposed as "vm" context property from C++ (main.cpp) ----
+    // Do NOT instantiate OrganismViewModel here — it lives on the C++ side.
 
     // ---- Keyboard: toggle diagnostics ----
     property bool showDiag: false

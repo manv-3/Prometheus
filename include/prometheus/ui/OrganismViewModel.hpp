@@ -2,7 +2,6 @@
 
 #include "prometheus/common/OrganismSnapshot.hpp"
 #include <QObject>
-#include <QQmlEngine>
 #include <QString>
 #include <memory>
 
@@ -17,7 +16,6 @@ namespace prometheus::ui {
  */
 class OrganismViewModel : public QObject {
     Q_OBJECT
-    QML_ELEMENT
 
     // ---- Core drives [0.0, 1.0] ----
     Q_PROPERTY(float energy        READ energy        NOTIFY snapshotChanged)
