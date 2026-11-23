@@ -52,6 +52,11 @@ struct SimulationThread::Impl {
     float    tickAccumSeconds{0.0f};
     float    measuredSimHz{0.0f};
 
+    // Periodic checkpoint timer (REQ-MEMORY-02)
+    // Saves every kPeriodicCheckpointIntervalSeconds regardless of transitions.
+    static constexpr float kPeriodicCheckpointIntervalSeconds{60.0f}; // initial, to be tuned
+    float periodicCheckpointAccumSeconds{0.0f};
+
     // Threading (declared after non-trivial members so they're initialised last)
     bool             syntheticMode{false};
     SnapshotCallback onSnapshot;
@@ -209,6 +214,13 @@ struct SimulationThread::Impl {
             if (state.current_behaviour != prevBehaviour) {
                 saveCheckpoint(memory::SaveTrigger::BehaviourTransition);
                 prevBehaviour = state.current_behaviour;
+            }
+
+            // 10b. Periodic checkpoint — guards against loss between transitions
+            periodicCheckpointAccumSeconds += dt;
+            if (periodicCheckpointAccumSeconds >= kPeriodicCheckpointIntervalSeconds) {
+                saveCheckpoint(memory::SaveTrigger::Periodic);
+                periodicCheckpointAccumSeconds = 0.0f;
             }
 
             // 11. Publish immutable snapshot
