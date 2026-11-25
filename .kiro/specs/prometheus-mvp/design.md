@@ -1,8 +1,8 @@
 # PROMETHEUS MVP – Design
 
-> Status: **draft**. Corresponds to the requirements in `requirements.md`.  
-> Full subsystem detail lives in `prometheus-docs/architecture.md` and `prometheus-docs/interfaces.md`.  
-> This document describes *how* the requirements will be satisfied, not what the requirements are.
+> Status: **MVP implemented** (corresponds to `requirements.md`).  
+> Full subsystem detail lives in `prometheus-docs/architecture.md`, `prometheus-docs/interfaces.md`, and `prometheus-docs/animation-spec.md`.  
+> This document describes *how* the requirements are satisfied, not what the requirements are.
 
 ---
 
@@ -121,19 +121,19 @@ On wake, `MemoryManager::loadCheckpoint()` is called and the restored state is i
 
 ## 8. Memory / persistence (REQ-MEMORY-01 – REQ-MEMORY-02)
 
-`MemoryManager` owns the SQLite connection. All DB work happens on a dedicated **persistence worker thread** that receives requests via a bounded `std::queue` (capacity: `config.persistenceQueueDepth`). The simulation thread enqueues a `CheckpointRequest`; it never waits for the write to complete.
+`MemoryManager` (`src/memory/MemoryManager.cpp`) owns the SQLite connection (`prometheus.db`). Checkpoints are written via SQLite transactions directly from `SimulationThread` on dormancy entry/exit, behaviour transitions, a periodic 60 s timer, and clean shutdown — never on the Qt GUI thread.
 
-Schema version is stored in `schema_version`. Migrations are handled at startup before the simulation starts. Corrupt or incomplete checkpoints fall through to `initNewOrganism()`.
-
-Atomic checkpoint replacement: write to a `checkpoints_tmp` row, then rename/update within a transaction.
+Schema version (`kSchemaVersion = 1`) is stored in `schema_version`. Corrupt or incomplete checkpoints fall through to default-initialized state. Non-finite (`NaN`/`Inf`) fields are sanitized before saving.
 
 ---
 
-## 9. UI / ViewModel (REQ-UI-01 – REQ-UI-02)
+## 9. UI / ViewModel, Animation & Locomotion (REQ-UI-01 – REQ-UI-03)
 
-`OrganismViewModel : QObject` holds a `std::shared_ptr<const OrganismSnapshot>` updated via a queued signal from the simulation thread. All `Q_PROPERTY` values are read from that snapshot; there are no setters that modify simulation state.
+`OrganismViewModel : QObject` holds a `std::shared_ptr<const OrganismSnapshot>` updated via `Qt::QueuedConnection` from `SimulationThread`. All snapshot `Q_PROPERTY`s are read-only; no path modifies simulation internals.
 
-Synthetic telemetry indicator: a `Q_PROPERTY bool syntheticMode` derived from `snapshot->telemetrySource`. QML binds a visible `Text { text: "SYNTHETIC" }` element to this property.
+- **Synthetic telemetry indicator (`REQ-UI-02`):** `syntheticMode` property drives the top-right `SYNTHETIC` badge and diagnostics status indicator.
+- **View-layer animation & skins (`REQ-UI-03`):** `OrganismViewModel` derives `animState` (`Behaviour × QualityTier`), `animPulse` (asymmetric trailing-baseline pressure spike detector), `targetRenderHz`, and companion skin state (`cat`, `owl`, `fox`, `bot`, `slime`, or local custom drop via `CharacterPanel.qml`), persisting UI-only choices in `QSettings`.
+- **Desktop locomotion (`LocomotionEngine`):** `LocomotionEngine` (`src/ui/LocomotionEngine.cpp`) computes seeded deterministic desktop walking (`IdleWander`, `ExplorePatrol` with screen-edge reversal and sub-pixel X accumulation), damped spring drag sway, cursor gaze (`ObserveGaze`), monitor-edge peek (`edgePeekSide`), and taskbar sitting (`isSitting`). `AnimationLayer.qml` layers procedural stride bounce, lean/waddle, bottom-anchored squash-and-stretch, directional flip, and per-character motion profiles on top of the active SVG/image. `Main.qml` throttles `FrameAnimation` steps to `targetRenderHz`, pauses on hover/open panels, and halts walking/timers completely when `dormant`.
 
 ---
 
@@ -141,24 +141,20 @@ Synthetic telemetry indicator: a `Q_PROPERTY bool syntheticMode` derived from `s
 
 | Thread | Created by | Communicates via |
 |---|---|---|
-| GUI (Qt main) | Qt framework | Queued signals from simulation thread |
-| Sensor worker | `SensorWorker::start()` in Core | Mutex-protected `HostObservation` latest-value slot |
-| Simulation | `SimulationThread::start()` in Core | Publishes `shared_ptr<const OrganismSnapshot>` via queued signal; enqueues `CheckpointRequest` |
-| Persistence worker | `PersistenceWorker::start()` in Core | Bounded queue from simulation thread |
+| GUI (Qt main) | Qt framework | Queued signal (`onSnapshotPublished`) from `SimulationThread`; owns `OrganismViewModel` & `LocomotionEngine` |
+| Sensor worker | `SensorWorker::start()` in `SimulationThread` | Mutex-protected `HostObservation` latest-value slot |
+| Simulation | `SimulationThread::start()` in `RuntimeCoordinator` | Publishes `shared_ptr<const OrganismSnapshot>` via queued signal; writes SQLite checkpoints |
 
 No `QObject` crosses thread boundaries. `OrganismSnapshot` is immutable after publication.
 
 ---
 
-## 11. Observer / developer panel (Phase 4)
+## 11. Observer / developer diagnostics panel
 
-A second QML view (toggled by a keyboard shortcut) shows:
-- Measured host values (`HostObservation`) separately from simulated organism variables (`OrganismState`).
-- Current `QualityTier`, `ComputeBudget` fields, `activeParticles`, `measuredSimHz`, `measuredRenderFps`.
-- Recent behaviour transitions with timestamps and trigger reasons.
-- A `SYNTHETIC` badge when running synthetic telemetry.
-
-This panel reads the same `OrganismSnapshot` as the main view. It adds no simulation logic.
+Toggled in `Main.qml` via `[D]` or right-click:
+- Measured host values (`hostCpuPct`, `hostRamPct`, validity flags) separately from simulated organism variables (`energy`, `health`, `stress`, `curiosity`, `adaptation`, `behaviour`, `qualityTier`).
+- Animation & locomotion state (`animState`, `animPulse`, `dragging`, `xfadeDuration`, `locomotionMode`, sitting/peek status, facing direction, window coordinates).
+- Runtime metrics (`activeParticles`, `measuredSimHz`, `simTimeSeconds`) and `● SYNTHETIC` / `● LIVE` badge.
 
 ---
 
@@ -166,6 +162,6 @@ This panel reads the same `OrganismSnapshot` as the main view. It adds no simula
 
 - No ML, reinforcement learning, or LLM calls in any module.
 - No network I/O.
-- No GPU telemetry in MVP (NVML is optional and isolated behind a compile flag).
+- No GPU telemetry in MVP (NVML is optional and deferred).
 - No genetic evolution, reproduction, or multi-organism coordination.
-- No third-party dependencies beyond the declared stack (CMake, Qt 6, SQLite, GoogleTest, Windows SDK).
+- No third-party runtime dependencies beyond the declared stack (C++20, CMake, Qt 6, SQLite3, GoogleTest, Windows SDK).

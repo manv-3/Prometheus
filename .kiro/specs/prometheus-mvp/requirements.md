@@ -1,7 +1,8 @@
 # PROMETHEUS MVP – Requirements
 
-> Status: **draft**. Ratify in Phase 0 alongside the contract freeze.  
-> All thresholds are initial placeholders; tune from measurements.  
+> Status: **MVP implemented (Phases 0–5)**.  
+> All thresholds are initial placeholders (`// initial, to be tuned`) until benchmark-calibrated.  
+> Note on ratified enum naming (`include/prometheus/common/OrganismState.hpp`): the original draft names `Conserve`/`Recover`/`Explore` map to `Stressed`/`Resting`/`Exploring`, plus `Observing`.  
 > Requirements use EARS form: WHEN [condition] THE SYSTEM SHALL [behaviour].
 
 ---
@@ -187,9 +188,22 @@ AND SHALL NOT hold mutable references to any simulation object, Windows handle, 
 
 ## REQ-UI-02 · Synthetic telemetry label
 
-WHEN `OrganismSnapshot.telemetrySource == TelemetrySource::Synthetic`  
+WHEN `OrganismSnapshot.telemetry_source == TelemetrySource::Synthetic`  
 THE SYSTEM SHALL display a visible indicator in the UI (e.g. "SYNTHETIC" overlay)  
 so that demo recordings and screenshots cannot be mistaken for live measurements.
+
+---
+
+## REQ-UI-03 · Budget-coupled animation, companion skinning & locomotion
+
+WHEN `OrganismSnapshot` changes `Behaviour`, `QualityTier`, or pressure delta (`animPulse`)  
+THE SYSTEM SHALL derive view-layer animation states (`animState`), pressure-spike flinch, and procedural gait/motion exclusively inside the UI layer (`OrganismViewModel`, `LocomotionEngine`, `AnimationLayer.qml`) without modifying simulation contracts.
+
+WHEN `OrganismSnapshot.dormant == true` or `QualityTier == Tier0_Dormant`  
+THE SYSTEM SHALL halt autonomous desktop walking, spring sway, cursor gaze, and non-dormant animation timers.
+
+WHEN the organism is awake and locomotion is enabled  
+THE SYSTEM SHALL pace frame-driven locomotion updates to `ComputeBudget::target_render_hz`, pause autonomous walking during pointer hover or open UI panels, and support `[C]` companion skin switching and `[M]` movement toggling persisted via `QSettings`.
 
 ---
 

@@ -4,10 +4,10 @@
     {
       "name": "Contract Change Guard",
       "trigger": "PostFileSave",
-      "matcher": "src/(core|sensory|brain|metabolism)/(Types|HostObservation|OrganismState|Behaviour|ComputeBudget|OrganismSnapshot|HardLimits)\\.(h|cpp)$",
+      "matcher": "include/prometheus/common/(HostObservation|OrganismState|ComputeBudget|OrganismSnapshot)\\.hpp$",
       "action": {
         "type": "agent",
-        "prompt": "A shared contract header was just saved. Before continuing:\n\n1. Confirm the change is intentional and not an accidental edit to a frozen interface.\n2. Check whether `kContractVersion` in `src/core/Types.h` needs to be bumped (required for any breaking change).\n3. Identify which other modules depend on this type and flag any that will now fail to compile or whose tests need updating.\n4. Remind the developer that contract changes require approval from both other developers before merging (see `prometheus-docs/interfaces.md` §4 change-control protocol).\n\nDo not proceed with further edits to dependent modules until the developer confirms the change is intentional."
+        "prompt": "A shared contract header was just saved. Before continuing:\n\n1. Confirm the change is intentional and not an accidental edit to a frozen interface.\n2. Check whether `kContractVersion` in `include/prometheus/common/OrganismSnapshot.hpp` needs to be bumped (required for any breaking change).\n3. Identify which other modules depend on this type and flag any that will now fail to compile or whose tests need updating.\n4. Remind the developer that contract changes require approval from both other developers before merging (see `prometheus-docs/interfaces.md` §4 change-control protocol).\n\nDo not proceed with further edits to dependent modules until the developer confirms the change is intentional."
       }
     }
   ]

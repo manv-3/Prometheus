@@ -28,12 +28,17 @@ This is the invariant that justifies the project's existence. Any code path that
 
 ## Tone and vocabulary
 
-Use the project's established terminology exactly (see `docs/glossary.md`):  `HostObservation`, `OrganismState`, `ComputeBudget`, `QualityTier`, `Behaviour`, `OrganismSnapshot`, `smoothedPressure`.  
+Use the project's established terminology exactly (see `prometheus-docs/glossary.md` and `include/prometheus/common/*.hpp`): `HostObservation`, `OrganismState`, `ComputeBudget`, `QualityTier`, `Behaviour`, `OrganismSnapshot`, `smoothed_pressure` / `environmental_pressure`.  
 Do not coin synonyms. Precision matters because human reviewers and AI agents share the same vocabulary.
+
+## Companion UI & moving animations (view-layer only)
+
+PROMETHEUS includes an expressive Qt/QML desktop surface (`AnimationLayer.qml`, `CharacterPanel.qml`, `LocomotionEngine`) inspired by `Mate-Engine`. All companion skins, autonomous desktop walking, spring-damped drag sway, cursor gaze, edge-peek, and taskbar sitting remain strictly view-layer (`src/ui/`, `resources/qml/`), throttled by `ComputeBudget::target_render_hz`, gated by `QualityTier`, and halted completely when `Dormant`.
 
 ## Scope limits (what this is not)
 
 - Not a CPU/RAM dashboard.
+- Not a decorative desktop pet disconnected from host `ComputeBudget`.
 - Not an LLM chatbot or AI personality.
 - Not a genetic algorithm or ML project.
 - Not a multi-organism ecosystem (post-MVP).
