@@ -2,8 +2,8 @@
 
 **Module:** UI (`src/ui/`, `resources/qml/`)  
 **Owner:** Developer C  
-**Status:** Implemented (Phase 1–4)  
-**Inspiration:** Mate-Engine (`shinyflvre/Mate-Engine`) — `AvatarAnimatorController.cs`
+**Status:** Implemented (Phase 1–5)  
+**Inspiration:** Mate-Engine (`shinyflvre/Mate-Engine`) — `AvatarAnimatorController.cs`, `AvatarLocomotionController.cs`, `AvatarSwayController.cs`, `AvatarMouseTracking.cs`, `AvatarHideHandler.cs`, `AvatarTaskbarController.cs`
 
 ---
 
@@ -157,24 +157,49 @@ animation pipeline.
 
 ---
 
-## 6. Files Changed
+## 6. Phase 5 — Moving Animations & Desktop Locomotion (`LocomotionEngine`)
+
+Direct feature comparison against `shinyflvre/Mate-Engine` and how PROMETHEUS adapts each moving-animation system to stay budget-coupled and deterministic:
+
+| Mate-Engine Script | Mate-Engine Behaviour | PROMETHEUS Implementation |
+|---|---|---|
+| `AvatarLocomotionController.cs` | `SetWindowPos` horizontal patrols (`WalkLeft` / `WalkRight`), edge turnaround, random dwell timer | `LocomotionEngine` (`IdleWander` at Tier >= 2, `ExplorePatrol` scaled by `QualityTier` & `curiosity`), sub-pixel accumulator, screen-edge reversal, paused on hover/open panel/dormancy |
+| `Walk` `.anim` clips | Skeletal walk cycle left/right | `AnimationLayer.qml`: `walkPhase`-driven stride hop (`\|sin\|`), forward lean + waddle, bottom-anchored squash-and-stretch (`Scale`), smooth horizontal flip (`facingScaleX`), per-character personality (`cat`, `owl`, `fox`, `bot`, `slime`), dynamic ground shadow & trailing particle wake |
+| `AvatarSwayController.cs` | Damped harmonic spring pendulum driven by window drag velocity | `LocomotionEngine::updateSwaySpring()`: 2.6 Hz damped spring (`swayRotation`, `swayOffsetX`, `swayOffsetY`) during drag & release settle (Tier >= 2; exponential clamp at Tier 1) |
+| `AvatarMouseTracking.cs` | Head/spine/eyes smoothly rotate toward cursor | `LocomotionEngine` cursor gaze in `Observing` / `Idle` (Tier >= 2): clamped `gazeLean`, `gazeShiftX`, and cursor-facing flip in `Observing` |
+| `AvatarHideHandler.cs` | Snap/unsnap hysteresis near monitor left/right edges (`HideLeft` / `HideRight`) | `edgePeekSide` (`-1` / `+1`) snap (`<= 14 px`) and unsnap (`> 34 px`), tucks `34 px` past monitor edge with inward peek tilt (`±14°`) |
+| `AvatarTaskbarController.cs` | Sit on top of Windows taskbar (`isSitting`) | Detects `Screen.desktopAvailableTop + Screen.desktopAvailableHeight` work-area bottom (`isSitting`) in `Idle`/`Resting`; stands up automatically when `Exploring` patrols |
+
+### Budget & Dormancy Guarantees for Moving Animations
+
+- **Dormant / Tier 0:** Immediately halts walking, clears spring sway and gaze, disables `FrameAnimation` and the `250 ms` decision timer.
+- **Stressed / Resting:** Autonomous desktop walking and cursor gaze are suppressed so the organism stays still and conserves host resources.
+- **Render-budget pacing:** `Main.qml` throttles `locomotionFrameAnim` steps to `vm.targetRenderHz` (`ComputeBudget::target_render_hz`) when not actively dragged, and drops back to a `4 Hz` decision timer while stationary between strolls.
+- **Controls:** Toggle autonomous walking anytime with **`M`** or the hover **`Move [M]`** pill (persisted in `QSettings` as `ui/locomotionEnabled`).
+
+---
+
+## 7. Files Changed
 
 | File | Change |
 |---|---|
-| `include/prometheus/ui/OrganismViewModel.hpp` | Added `animState`, `animPulse`, and character selection Q_PROPERTYs / slots |
-| `src/ui/OrganismViewModel.cpp` | Implemented `computeAnimState()`, `computeAnimPulse()`, character presets, custom file validation, and `QSettings` persistence |
-| `resources/qml/AnimationLayer.qml` | **New** — full animation state machine component |
+| `include/prometheus/ui/LocomotionEngine.hpp` | **New** — pure C++20 deterministic locomotion, spring sway, gaze, edge-peek, and taskbar-sit engine |
+| `src/ui/LocomotionEngine.cpp` | **New** — implementation of `LocomotionEngine` |
+| `include/prometheus/ui/OrganismViewModel.hpp` | Added `animState`, `animPulse`, `targetRenderHz`, locomotion Q_PROPERTYs / slots, and character selection Q_PROPERTYs |
+| `src/ui/OrganismViewModel.cpp` | Implemented `computeAnimState()`, `computeAnimPulse()`, `stepLocomotion()`, character presets, custom file validation, and `QSettings` persistence |
+| `resources/qml/AnimationLayer.qml` | **New** — full animation & procedural gait state machine component |
 | `resources/qml/CharacterPanel.qml` | **New** — companion character picker panel with live previews and file drop zone |
-| `resources/qml/Main.qml` | Integrated `AnimationLayer`, `CharacterPanel`, drag state, stress flare, `FrameAnimation` orbit, diag panel update |
+| `resources/qml/Main.qml` | Integrated `AnimationLayer`, `CharacterPanel`, locomotion loop, ground shadow, `[M]` toggle, drag spring sway, stress flare, `FrameAnimation` orbit, diag panel update |
 | `resources/characters/{owl,fox,bot,slime}.svg` | **New** — built-in vector character assets |
-| `CMakeLists.txt` | Registered `AnimationLayer.qml`, `CharacterPanel.qml`, and character SVGs in `qt_add_qml_module` |
-| `tests/ui/test_organism_viewmodel.cpp` | **New** — GoogleTest unit tests for `animState`, `animPulse`, and character selection/persistence |
+| `CMakeLists.txt` | Registered `LocomotionEngine`, `AnimationLayer.qml`, `CharacterPanel.qml`, and character SVGs |
+| `tests/ui/test_locomotion_engine.cpp` | **New** — GoogleTest unit tests for locomotion determinism, Tier gating, edge turnaround, spring sway, edge-peek, taskbar-sit, and gaze |
+| `tests/ui/test_organism_viewmodel.cpp` | **New** — GoogleTest unit tests for `animState`, `animPulse`, locomotion integration, and character selection/persistence |
 | `tests/CMakeLists.txt` | Added `prometheus_ui_tests` target |
 | `prometheus-docs/animation-spec.md` | **This file** |
 
 ---
 
-## 7. NORTHSTAR Compliance
+## 8. NORTHSTAR Compliance
 
 | Rule | Status |
 |---|---|
