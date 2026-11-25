@@ -20,14 +20,16 @@ import QtQuick.Window
  *   Dormancy        ← dormant            (shrinks, greyscale, slow breathing)
  *   Bounce anim     ← curiosity          (subtle bounce when curious)
  *
- *   === Mate-Engine animation system (Phase 1–4) ===
+ *   === Mate-Engine animation system (Phase 1–5) ===
  *   animState       ← Behaviour × QualityTier  (body posture / scale / rotation)
  *   animPulse       ← pressure spike           (flinch burst — analog: BPM spike)
- *   isDragging      ← mouse drag               (tilt + float — analog: drag/drop state)
+ *   isDragging      ← mouse drag               (velocity spring sway — AvatarSwayController)
  *   idle sub-cycle  ← timer-driven QML         (random stretch + head-tilt)
+ *   locomotion      ← LocomotionEngine         (desktop patrol, gait, gaze, edge-peek, taskbar-sit)
  *
  * Controls:
  *   [C] or "Chars" pill : toggle Character Selector Panel
+ *   [M] or "Move" pill  : toggle autonomous desktop walking
  *   [D] or right-click  : toggle Developer Diagnostics Panel
  *   [Esc]               : close open overlay panel
  *
@@ -59,9 +61,82 @@ Window {
     property bool showDiag:      false
     property bool showCharPanel: false
 
-    // ---- Drag state (Phase 3 — Mate-Engine drag/drop interaction analog) ----
-    // Tracked purely in QML; drives AnimationLayer.dragging.
+    // ---- Drag state (Mate-Engine drag/sway interaction) ----
     property bool isDragging: false
+    onIsDraggingChanged: runLocomotionStep(isDragging ? 0.0 : 0.016)
+
+    // ---- Locomotion step helper (Phase 5) ----
+    function runLocomotionStep(dt) {
+        const charBottomLocal = catBody.y + catBody.height
+        const blocked = windowHover.hovered || root.showCharPanel || root.showDiag
+        const shouldMove = vm.stepLocomotion(
+            dt,
+            root.x, root.y,
+            organismStage.width, organismStage.height,
+            charBottomLocal,
+            Screen.desktopAvailableLeft, Screen.desktopAvailableTop,
+            Screen.desktopAvailableWidth, Screen.desktopAvailableHeight,
+            root.isDragging,
+            blocked
+        )
+        if (shouldMove) {
+            root.x = Math.round(vm.targetWindowX)
+        }
+    }
+
+    Component.onCompleted: {
+        // Clamp initial window placement safely inside the active screen work area
+        const minX = Screen.desktopAvailableLeft
+        const maxX = Math.max(minX, minX + Screen.desktopAvailableWidth - organismStage.width)
+        const minY = Screen.desktopAvailableTop
+        const maxY = Math.max(minY, minY + Screen.desktopAvailableHeight - organismStage.height)
+        if (root.x < minX || root.x > maxX) root.x = Math.round((minX + maxX) * 0.5)
+        if (root.y < minY || root.y > maxY) root.y = Math.round(maxY - 20)
+    }
+
+    // High-FPS locomotion & spring-sway animation driver (paused when dormant/stationary)
+    FrameAnimation {
+        id: locomotionFrameAnim
+        running: !vm.dormant && (root.isDragging || vm.locomotionNeedsTick)
+        property real _accumDt: 0.0
+        onRunningChanged: {
+            if (!running) _accumDt = 0.0
+        }
+        onTriggered: {
+            const safeDt = Math.min(frameTime, 0.05)
+            if (root.isDragging) {
+                _accumDt = 0.0
+                root.runLocomotionStep(safeDt)
+                return
+            }
+            const budgetHz = Math.max(1, vm.targetRenderHz)
+            const minStep = 1.0 / budgetHz
+            _accumDt += safeDt
+            if (_accumDt >= minStep) {
+                const stepDt = Math.min(_accumDt, 0.1)
+                _accumDt = 0.0
+                root.runLocomotionStep(stepDt)
+            }
+        }
+    }
+
+    // Low-frequency (4 Hz) decision timer when stationary in Idle/Exploring/Observing
+    Timer {
+        id: locomotionIdleTimer
+        interval: 250
+        repeat: true
+        running: !vm.dormant && !locomotionFrameAnim.running && !root.isDragging &&
+                 vm.locomotionEnabled &&
+                 (vm.behaviour === "Idle" || vm.behaviour === "Exploring" || vm.behaviour === "Observing")
+        onTriggered: root.runLocomotionStep(0.25)
+    }
+
+    Connections {
+        target: vm
+        function onLocomotionConfigChanged() {
+            if (!vm.dormant) root.runLocomotionStep(0.016)
+        }
+    }
 
     function toggleCharPanel() {
         root.showCharPanel = !root.showCharPanel
@@ -85,6 +160,9 @@ Window {
                 event.accepted = true
             } else if (event.key === Qt.Key_C) {
                 root.toggleCharPanel()
+                event.accepted = true
+            } else if (event.key === Qt.Key_M) {
+                vm.toggleLocomotion()
                 event.accepted = true
             } else if (event.key === Qt.Key_Escape && (root.showDiag || root.showCharPanel)) {
                 root.showDiag = false
@@ -265,15 +343,35 @@ Window {
                 }
             }
 
+            transform: Translate { x: -vm.facingDir * vm.walkIntensity * 10.0 }
+
             FrameAnimation {
                 running: !vm.dormant && particleField.visibleDots > 0
                 onTriggered: {
                     const durSec = Math.max(4.0, 18.0 - vm.curiosity * 12.0 - vm.qualityTier * 1.0)
                     const dir = root.isDragging ? -1.0 : 1.0
-                    const step = dir * (360.0 / durSec) * Math.min(frameTime, 0.1)
+                    const walkBoost = 1.0 + vm.walkIntensity * 0.65
+                    const step = dir * walkBoost * (360.0 / durSec) * Math.min(frameTime, 0.1)
                     particleField.rotation = (particleField.rotation + step + 360.0) % 360.0
                 }
             }
+        }
+
+        // Ground contact shadow (shrinks when jumping/dragged, widens when sitting)
+        Rectangle {
+            id: groundShadow
+            anchors {
+                horizontalCenter: catBody.horizontalCenter
+                top: catBody.bottom
+                topMargin: -4
+            }
+            readonly property real liftFactor: Math.max(0.0, Math.min(1.0, (-anim.bodyYOffset) / 14.0))
+            width:  Math.max(24, catBody.width * (vm.isSitting ? 0.86 : (0.70 - liftFactor * 0.22)))
+            height: vm.isSitting ? 9 : 7
+            radius: height / 2
+            color:  Qt.rgba(0.0, 0.0, 0.0, vm.dormant ? 0.16 : (0.34 - liftFactor * 0.16))
+            transform: Translate { x: anim.bodyXOffset * 0.65 }
+            Behavior on width { NumberAnimation { duration: 160 } }
         }
 
         // ============================================================
@@ -309,7 +407,18 @@ Window {
 
             scale:     anim.bodyScale
             rotation:  anim.bodyRotation
-            transform: Translate { y: anim.bodyYOffset }
+            transform: [
+                Scale {
+                    origin.x: catBody.width / 2
+                    origin.y: catBody.height
+                    xScale: anim.squashScaleX
+                    yScale: anim.squashScaleY
+                },
+                Translate {
+                    x: anim.bodyXOffset
+                    y: anim.bodyYOffset
+                }
+            ]
 
             // Greyscale filter when dormant
             layer.enabled:  vm.dormant
@@ -334,6 +443,11 @@ Window {
                 fillMode: Image.PreserveAspectFit
                 smooth: true
                 antialiasing: true
+                transform: Scale {
+                    origin.x: catImage.width / 2
+                    origin.y: catImage.height / 2
+                    xScale: anim.facingScaleX
+                }
             }
 
             // Behaviour colour tint overlay
@@ -463,6 +577,57 @@ Window {
             }
         }
 
+        // Subtle hover pill to toggle autonomous moving/walking
+        Rectangle {
+            id: moveBtnPill
+            anchors { top: charBtnPill.top; left: charBtnPill.right; leftMargin: 6 }
+            width:  movePillRow.implicitWidth + 12
+            height: 20
+            radius: 10
+            visible: !root.showDiag && (windowHover.hovered || root.showCharPanel)
+            color: vm.locomotionEnabled
+                ? (movePillMouse.containsMouse
+                    ? Qt.rgba(0.18, 0.65, 0.42, 0.90)
+                    : Qt.rgba(0.12, 0.48, 0.32, 0.80))
+                : (movePillMouse.containsMouse
+                    ? Qt.rgba(0.16, 0.18, 0.24, 0.90)
+                    : Qt.rgba(0.06, 0.08, 0.14, 0.75))
+            border.width: 1
+            border.color: vm.locomotionEnabled ? "#6ee7b7" : Qt.rgba(1, 1, 1, 0.22)
+
+            Row {
+                id: movePillRow
+                anchors.centerIn: parent
+                spacing: 4
+
+                Rectangle {
+                    width: 6
+                    height: 6
+                    radius: 3
+                    color: vm.locomotionEnabled ? "#34d399" : "#64748b"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    text: vm.locomotionEnabled ? "Move [M]" : "Still [M]"
+                    font.pixelSize: 9
+                    font.bold: true
+                    color: "#e6eefc"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
+            MouseArea {
+                id: movePillMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    vm.toggleLocomotion()
+                    keyHandler.forceActiveFocus()
+                }
+            }
+        }
+
         // ============================================================
         //  LAYER 8 — Developer diagnostics panel (press D or right-click)
         // ============================================================
@@ -511,6 +676,19 @@ Window {
                     font.pixelSize: 9
                     color: "white"
                 }
+                Text {
+                    text: "Move      " + vm.locomotionMode +
+                          (vm.isSitting ? " (Sit)" : (vm.edgePeekSide !== 0 ? " (Peek)" : "")) +
+                          " [" + (vm.facingDir < 0 ? "L" : "R") + "]"
+                    font.pixelSize: 9
+                    color: vm.isWalking ? "#6ee7b7" : "#cbd5e1"
+                }
+                Text {
+                    text: "WalkCtrl  " + (vm.locomotionEnabled ? "ON" : "OFF") +
+                          " · (" + Math.round(root.x) + "," + Math.round(root.y) + ")"
+                    font.pixelSize: 9
+                    color: vm.locomotionEnabled ? "#a7f3d0" : "#94a3b8"
+                }
 
                 Text { text: "── HOST ──"; font.pixelSize: 9; font.bold: true; color: "#aaaaff"; topPadding: 4 }
                 Text { text: "CPU  " + (vm.hostCpuValid ? vm.hostCpuPct.toFixed(1) + "%" : "N/A"); font.pixelSize: 9; color: vm.hostCpuValid ? "white" : "#ff8888" }
@@ -557,7 +735,7 @@ Window {
         // Shortcut hint
         Text {
             anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
-            text: "[C] chars · [D] diag"
+            text: "[C] chars · [M] move · [D] diag"
             font.pixelSize: 8
             color: Qt.rgba(1, 1, 1, 0.35)
             visible: !root.showDiag && !root.showCharPanel
