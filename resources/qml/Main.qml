@@ -39,19 +39,41 @@ Window {
     // ---- ViewModel is exposed as "vm" context property from C++ (main.cpp) ----
     // Do NOT instantiate OrganismViewModel here — it lives on the C++ side.
 
-    // ---- Keyboard: toggle diagnostics ----
+    // ---- Focus item — keyboard events need an Item with focus, not Window ----
     property bool showDiag: false
-    Keys.onPressed: (event) => {
-        if (event.key === Qt.Key_D) root.showDiag = !root.showDiag
+
+    Item {
+        id: keyHandler
+        anchors.fill: parent
+        focus: true
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_D) {
+                root.showDiag = !root.showDiag
+                event.accepted = true
+            }
+        }
     }
 
-    // ---- Drag to reposition ----
+    // ---- Drag to reposition + grab keyboard focus on any click ----
     MouseArea {
         anchors.fill: parent
         property point startPos
-        onPressed:  (m) => { startPos = Qt.point(m.x, m.y); root.requestActivate() }
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+
+        onPressed: (m) => {
+            startPos = Qt.point(m.x, m.y)
+            root.requestActivate()     // bring window to front
+            keyHandler.forceActiveFocus()  // grab keyboard focus
+            if (m.button === Qt.RightButton) {
+                root.showDiag = !root.showDiag
+                m.accepted = true
+            }
+        }
         onPositionChanged: (m) => {
-            if (pressed) { root.x += m.x - startPos.x; root.y += m.y - startPos.y }
+            if (pressed && (m.buttons & Qt.LeftButton)) {
+                root.x += m.x - startPos.x
+                root.y += m.y - startPos.y
+            }
         }
     }
 
@@ -342,10 +364,10 @@ Window {
         }
     }
 
-    // Press D hint
+    // Press D / right-click hint
     Text {
         anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
-        text: "[D] diag"
+        text: "[D] / right-click: diag"
         font.pixelSize: 8
         color: Qt.rgba(1, 1, 1, 0.3)
         visible: !root.showDiag
