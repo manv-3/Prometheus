@@ -168,6 +168,7 @@ qt_add_qml_module(prometheus_app
     VERSION 1.0
     QML_FILES
         resources/qml/Main.qml
+        resources/qml/AnimationLayer.qml
     RESOURCES
         resources/organism.svg
 )
