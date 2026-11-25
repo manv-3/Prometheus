@@ -5,9 +5,10 @@ Onboarding and working agreement for the three developers on PROMETHEUS. AI agen
 ## 1. Read these first (about 30 minutes)
 
 1. [NORTHSTAR.md](NORTHSTAR.md): why we are building this and what "done" means
-2. [docs/architecture.md](docs/architecture.md): how the pieces fit
-3. [docs/interfaces.md](docs/interfaces.md): the contracts we share
-4. [docs/roadmap.md](docs/roadmap.md): phases and who does what
+2. [prometheus-docs/architecture.md](prometheus-docs/architecture.md): how the pieces fit
+3. [prometheus-docs/interfaces.md](prometheus-docs/interfaces.md): the contracts we share
+4. [prometheus-docs/roadmap.md](prometheus-docs/roadmap.md): phases and who does what
+5. [prometheus-docs/animation-spec.md](prometheus-docs/animation-spec.md): QML animation state machine and desktop locomotion
 
 ## 2. Roles
 
@@ -42,13 +43,17 @@ Measurement tools (Dev A, but everyone should know them): Windows Performance Mo
 ### Verify your setup
 
 ```powershell
-cmake --preset windows-msvc-debug      # configure
-cmake --build --preset windows-msvc-debug
-ctest --preset windows-msvc-debug      # all tests green
-.\build\windows-msvc-debug\src\app\prometheus.exe --synthetic   # (planned flag)
-```
+# MinGW (Qt 6.12 MinGW kit, active preset)
+cmake --preset windows-mingw-debug
+cmake --build --preset windows-mingw-debug
+ctest --preset windows-mingw-debug --output-on-failure
+.\run.bat --synthetic
 
-These work once the Phase 0 skeleton merges.
+# Or MSVC kit (if Qt MSVC kit is installed)
+cmake --preset windows-msvc-debug
+cmake --build --preset windows-msvc-debug
+ctest --preset windows-msvc-debug --output-on-failure
+```
 
 ## 4. Workflow
 
@@ -56,7 +61,7 @@ These work once the Phase 0 skeleton merges.
 - Branches: `feat/<module>-<short-name>`, `fix/...`, `docs/...`. Keep them short-lived (days, not weeks).
 - Commits: imperative, scoped, e.g. `brain: add EMA pressure filter`.
 - PRs: small, one concern, linked to a roadmap item; at least one review. Use the checklist in [CONTRIBUTING.md](CONTRIBUTING.md).
-- **Shared headers** (`HostObservation`, `OrganismState`, `ComputeBudget`, `OrganismSnapshot`, `Behaviour`, `QualityTier`): any change needs approval from **both other devs**. See [docs/interfaces.md](docs/interfaces.md).
+- **Shared headers** (`HostObservation`, `OrganismState`, `ComputeBudget`, `OrganismSnapshot`, `Behaviour`, `QualityTier`): any change needs approval from **both other devs**. See [prometheus-docs/interfaces.md](prometheus-docs/interfaces.md).
 - End of each phase: 30-minute integration check; everyone merges and runs the full app.
 
 ## 5. Day-to-day rules of thumb
@@ -95,24 +100,24 @@ Update this table in the PRs that change it.
 
 | Area | Owner | Status | Notes |
 |---|---|---|---|
-| Phase 0 contracts + skeleton | All / C | Not started | Hard gate |
-| Hackathon rules verified | All | Not started | See checklist |
-| Synthetic telemetry | A | Not started | Unblocks B |
-| CPU/RAM monitors | A | Not started | |
-| State equations + pressure | B | Not started | |
-| State machine + hysteresis | B | Not started | |
-| ComputeBudget + tiers | B | Not started | |
-| Window + organism visual | C | Not started | |
-| Particle pool + clocks | C | Not started | |
-| Coordinator + snapshots | C | Not started | |
-| SQLite persistence | A | Not started | |
-| Dormancy end-to-end | All | Not started | Phase 3 |
-| Benchmark harness | A | Not started | Phase 4 |
-| Observer panel + demo flow | C | Not started | Phase 4 |
+| Phase 0 contracts + skeleton | All / C | Done | `include/prometheus/common/*.hpp`, `kContractVersion = 2`, CMake presets |
+| Hackathon rules verified | All | Not started | See [prometheus-docs/hackathon-checklist.md](prometheus-docs/hackathon-checklist.md) |
+| Synthetic telemetry | A | Done | `SyntheticProvider` |
+| CPU/RAM monitors | A | Done | Win32 PDH `CpuMonitor`, `MemoryMonitor`, `RealSensorProvider`, `SensorWorker` |
+| State equations + pressure | B | Done | `EmaFilter`, `PressureEstimator`, `HomeostasisEngine` + tests |
+| State machine + hysteresis | B | Done | `BehaviourFSM` + tests |
+| ComputeBudget + tiers | B | Done | `Metabolism` + `--fixed-tier` + tests |
+| Window + organism visual | C | Done | `Main.qml`, `AnimationLayer.qml`, `CharacterPanel.qml`, `LocomotionEngine` |
+| Particle pool + clocks | C | Done | `ParticleSystem`, `RuntimeScheduler` + tests |
+| Coordinator + snapshots | C | Done | `RuntimeCoordinator`, `SimulationThread`, `OrganismViewModel` |
+| SQLite persistence | A | Done | `MemoryManager` + `prometheus.db` + tests |
+| Dormancy end-to-end | All | Implemented | `SimulationThread` 0.2 Hz heartbeat + UI dormancy gate (end-to-end CPU benchmark TBD) |
+| Benchmark harness | A | Script ready | `scripts/benchmark.ps1`, `scripts/stress-worker.ps1` (formal measured runs TBD) |
+| Observer panel + demo flow | C | Done | `[D]` Diagnostics overlay in `Main.qml`, `scripts/demo-stress.ps1` |
 
 ## 9. Getting unstuck
 
-- Contract questions → [docs/interfaces.md](docs/interfaces.md), then raise in the contract review.
-- "Why this threshold?" → [docs/organism-model.md](docs/organism-model.md); if unjustified, mark it `untuned`.
-- "How do we prove this claim?" → [docs/benchmark-methodology.md](docs/benchmark-methodology.md).
+- Contract questions → [prometheus-docs/interfaces.md](prometheus-docs/interfaces.md), then raise in the contract review.
+- "Why this threshold?" → [prometheus-docs/organism-model.md](prometheus-docs/organism-model.md); if unjustified, mark it `untuned`.
+- "How do we prove this claim?" → [prometheus-docs/benchmark-methodology.md](prometheus-docs/benchmark-methodology.md).
 - Scope creep → [NORTHSTAR.md](NORTHSTAR.md) decision filter.

@@ -2,7 +2,7 @@
 
 Context and rules for **AI coding agents** (Claude Code, Kiro, Copilot, etc.) working in this repository. Humans should read [DEVCONTEXT.md](DEVCONTEXT.md). If your tool expects a specific filename (`CLAUDE.md`, `AGENTS.md`, a Kiro steering file), copy or link this file; keep one source of truth.
 
-> Whether the hackathon requires specific Kiro artifacts is **unverified**. Do not invent such requirements. See [docs/hackathon-checklist.md](docs/hackathon-checklist.md).
+> Whether the hackathon requires specific Kiro artifacts is **unverified**. Do not invent such requirements. See [prometheus-docs/hackathon-checklist.md](prometheus-docs/hackathon-checklist.md).
 
 ## 1. What this project is (30 seconds)
 
@@ -10,7 +10,7 @@ PROMETHEUS is a Windows desktop artificial-life organism (C++20, Qt 6/QML). It s
 
 **The one proof:** under rising host pressure it reduces its own measured computational work, keeps its identity, and recovers. Read [NORTHSTAR.md](NORTHSTAR.md) before proposing any feature.
 
-**Current status:** design phase. Check [DEVCONTEXT.md](DEVCONTEXT.md) status board and `git log` to see what actually exists. Never assume a module is implemented.
+**Current status:** MVP + Phase 5 UI/locomotion implemented (145 CTest tests passing; benchmark runs TBD). Always verify against [DEVCONTEXT.md](DEVCONTEXT.md) status board and `git log`.
 
 ## 2. Module map and ownership
 
@@ -28,7 +28,7 @@ Dependency direction: `app/ui → core → {sensory, brain, metabolism, body, me
 
 ## 3. Hard rules (non-negotiable)
 
-1. **Shared contracts are frozen.** `HostObservation`, `OrganismState`, `ComputeBudget`, `OrganismSnapshot`, `Behaviour`, `QualityTier` live in [docs/interfaces.md](docs/interfaces.md). Do not change them unilaterally. If a change is necessary, stop and propose it (see the change protocol in that doc).
+1. **Shared contracts are frozen.** `HostObservation`, `OrganismState`, `ComputeBudget`, `OrganismSnapshot`, `Behaviour`, `QualityTier` live in [prometheus-docs/interfaces.md](prometheus-docs/interfaces.md) and `include/prometheus/common/`. Do not change them unilaterally. If a change is necessary, stop and propose it (see the change protocol in that doc).
 2. **Missing telemetry is never zero.** Use `Metric{value, valid}`. Renormalize pressure weights over valid signals. Stale data triggers conservative fallback.
 3. **Bounded everything.** Fixed-capacity particle pool (activate/deactivate, no per-frame alloc), capped histories and queues. No unbounded containers in hot paths.
 4. **Hard limits have final authority.** No heuristic, learned model or tuning parameter may exceed them.
@@ -39,13 +39,13 @@ Dependency direction: `app/ui → core → {sensory, brain, metabolism, body, me
 9. **No decorative biology.** Every internal variable must have a causal effect and a test.
 10. **No ML in the critical loop.** Deterministic baseline first.
 11. **Never fabricate results.** Do not invent benchmark numbers, RAM/CPU figures, test outcomes or hackathon requirements. Placeholders must be visibly marked `TBD`. Label synthetic telemetry as synthetic everywhere it appears.
-12. **No new dependencies** (Boost, ML frameworks, network services) without a documented need in [docs/decisions.md](docs/decisions.md).
+12. **No new dependencies** (Boost, ML frameworks, network services) without a documented need in [prometheus-docs/decisions.md](prometheus-docs/decisions.md).
 
 ## 4. Conventions
 
-- **Language:** C++20, CMake. Warnings as errors on new code (`/W4 /WX` on MSVC) once the skeleton lands.
+- **Language:** C++20, CMake. Warnings as errors on new code (`/W4 /WX` on MSVC) once clean.
 - **Time:** `std::chrono::steady_clock` for timestamps and intervals; `float` seconds for `deltaTime`. Never use wall-clock time for control logic.
-- **Errors:** no exceptions across module boundaries in the hot loop; return values/validity flags. I/O (Memory) returns explicit result types. (Proposed; ratified in Phase 0. See [docs/decisions.md](docs/decisions.md).)
+- **Errors:** no exceptions across module boundaries in the hot loop; return values/validity flags. I/O (Memory) returns explicit result types. (Ratified; see [prometheus-docs/decisions.md](prometheus-docs/decisions.md).)
 - **Naming:** types `PascalCase`, functions/members `camelCase`, constants `kPascalCase`, files match the primary type.
 - **Config over magic numbers:** thresholds, weights, tier tables and limits live in a config structure with documented defaults, not inline literals.
 - **Logging:** rate-limited. Sensor failures must not flood the log.
@@ -53,9 +53,9 @@ Dependency direction: `app/ui → core → {sensory, brain, metabolism, body, me
 
 ## 5. Working method for any task
 
-1. Read [NORTHSTAR.md](NORTHSTAR.md), the relevant `docs/*.md`, and the files you will touch.
+1. Read [NORTHSTAR.md](NORTHSTAR.md), the relevant `prometheus-docs/*.md`, and the files you will touch.
 2. State which module you are changing and confirm it matches the owner's scope. Stay inside it.
-3. Write or update **tests first or alongside** the change (see [docs/testing-strategy.md](docs/testing-strategy.md)).
+3. Write or update **tests first or alongside** the change (see [prometheus-docs/testing-strategy.md](prometheus-docs/testing-strategy.md)).
 4. Keep changes small and focused; one concern per PR.
 5. Build and run tests before declaring done. If you cannot run them (e.g., no Windows environment), say so explicitly; do not claim they pass.
 6. Update docs when behaviour, contracts or thresholds change.
@@ -63,14 +63,14 @@ Dependency direction: `app/ui → core → {sensory, brain, metabolism, body, me
 ## 6. When to stop and ask a human
 
 - A contract change seems required.
-- Two docs disagree (for example, `Behaviour` naming; see the open decisions in [docs/decisions.md](docs/decisions.md)).
+- Two docs disagree (see [prometheus-docs/decisions.md](prometheus-docs/decisions.md)).
 - A task would add a dependency, a thread, a persistent format or a public-facing claim.
 - You cannot verify something that the work depends on (hackathon rules, hardware behaviour).
 
 ## 7. Task playbooks
 
 **Adding an internal variable**
-1. Define its range and meaning in [docs/organism-model.md](docs/organism-model.md).
+1. Define its range and meaning in [prometheus-docs/organism-model.md](prometheus-docs/organism-model.md).
 2. Name the behaviour or budget it causally affects.
 3. Add a bounds test and a causal-effect test.
 4. If it must be shared, follow the contract change protocol.
