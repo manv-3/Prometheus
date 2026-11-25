@@ -149,7 +149,9 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(prometheus_ui STATIC
     src/ui/OrganismViewModel.cpp
+    src/ui/LocomotionEngine.cpp
     include/prometheus/ui/OrganismViewModel.hpp
+    include/prometheus/ui/LocomotionEngine.hpp
 )
 target_include_directories(prometheus_ui PUBLIC ${PROMETHEUS_INCLUDE_DIR})
 set_target_properties(prometheus_ui PROPERTIES AUTOMOC ON)
