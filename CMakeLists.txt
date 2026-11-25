@@ -160,7 +160,7 @@ target_link_libraries(prometheus_ui PUBLIC prometheus_core Qt6::Core Qt6::Quick 
 # Entry point, lifecycle.
 # Dependency order: app -> ui -> core -> {sensory, brain, metabolism, body, memory}
 # ---------------------------------------------------------------------------
-qt_add_executable(prometheus_app
+qt_add_executable(prometheus_app WIN32
     src/app/main.cpp
 )
 qt_add_qml_module(prometheus_app
