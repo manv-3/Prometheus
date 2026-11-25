@@ -1,35 +1,22 @@
 import QtQuick
 
 /**
- * AnimationLayer.qml — PROMETHEUS Animation State Machine
+ * AnimationLayer.qml — PROMETHEUS Animation State Machine (Phases 1–5)
  *
- * Encapsulates all behaviour-driven body animations for the organism.
- * Inspired by Mate-Engine's AvatarAnimatorController.cs which manages FSM
- * transitions between idle, dance, drag, and interaction states.
- *
- * PROMETHEUS adaptation maps:
- *   animState (vm.animState)  → body transformation target values
- *   animPulse (vm.animPulse)  → flinch/burst reactive animation
- *                               (Mate-Engine: audio BPM spike → dance burst)
- *   dragging  (input prop)    → tilt + float effect
- *                               (Mate-Engine: drag/drop avatar state)
- *   QualityTier               → animation complexity + crossfade duration
+ * Encapsulates all behaviour-driven body and moving animations for the organism.
+ * Inspired by Mate-Engine's:
+ *   - AvatarAnimatorController.cs  (FSM state transitions, idle sub-cycle, dance)
+ *   - AvatarLocomotionController.cs (desktop walking, left/right facing, gait)
+ *   - AvatarSwayController.cs       (velocity-reactive drag spring pendulum)
+ *   - AvatarMouseTracking.cs        (cursor gaze tracking)
+ *   - AvatarHideHandler.cs          (screen-edge peek pose)
+ *   - AvatarTaskbarController.cs    (taskbar-edge sitting pose)
  *
  * Rules:
  *   - Dormancy is always respected: all non-trivial animations check vm.dormant.
  *   - Transition durations are scaled by qualityTier (0 = instant, 4 = smoothest).
  *   - No simulation state is read or written here — purely presentational.
  *   - All durations are bounded; no unbounded loops.
- *
- * Usage in Main.qml:
- *   AnimationLayer {
- *       id: anim
- *       dragging: root.isDragging
- *   }
- *   // Then bind catBody:
- *   scale:    anim.bodyScale
- *   rotation: anim.bodyRotation
- *   transform: Translate { y: anim.bodyYOffset }
  */
 Item {
     id: animLayer
@@ -40,9 +27,48 @@ Item {
     property bool dragging: false
 
     // ----------------------------------------------------------------
+    // Per-character motion personality (purely visual scaling)
+    // ----------------------------------------------------------------
+    readonly property real hopGain: {
+        switch (vm.characterId) {
+            case "slime": return 1.35
+            case "owl":   return 1.20
+            case "fox":   return 1.05
+            case "bot":   return 0.40
+            default:      return 1.00
+        }
+    }
+    readonly property real squashGain: {
+        switch (vm.characterId) {
+            case "slime": return 1.90
+            case "owl":   return 0.70
+            case "fox":   return 0.90
+            case "bot":   return 0.30
+            default:      return 1.00
+        }
+    }
+    readonly property real leanGain: {
+        switch (vm.characterId) {
+            case "slime": return 0.55
+            case "owl":   return 0.80
+            case "fox":   return 1.25
+            case "bot":   return 1.45
+            default:      return 1.00
+        }
+    }
+    readonly property real waddleGain: {
+        switch (vm.characterId) {
+            case "slime": return 0.80
+            case "owl":   return 1.15
+            case "fox":   return 1.10
+            case "bot":   return 0.35
+            default:      return 1.00
+        }
+    }
+
+    // ----------------------------------------------------------------
     // Crossfade duration scaled by QualityTier
     // Mate-Engine: AnimationTransitionTime
-    // Tier 0=dormant/instant, drag=120ms (when awake), Tier 1..4=150..700ms
     // ----------------------------------------------------------------
     readonly property int xfadeDuration: {
         if (vm.qualityTier === 0) return 0
@@ -57,10 +83,9 @@ Item {
 
     // ----------------------------------------------------------------
     // Target values driven by animState + dragging
-    // Mate-Engine equivalent: AvatarAnimatorController parameter targets
     // ----------------------------------------------------------------
     readonly property real targetScale: {
-        if (dragging)                          return 1.08
+        if (dragging)                          return 1.07
         switch (vm.animState) {
             case "dormant":           return 0.88
             case "rest_deep":         return 0.92
@@ -76,13 +101,14 @@ Item {
     }
 
     readonly property real targetRotation: {
-        if (dragging)                          return 7.0
+        // When dragging, dynamic spring sway (vm.swayRotation) drives tilt instead of a static angle
+        if (dragging)                          return  0.0
         switch (vm.animState) {
             case "dormant":           return  0.0
             case "rest_deep":         return -3.0
             case "rest_light":        return -1.5
             case "idle":              return  0.0
-            case "alert":             return  2.0
+            case "alert":             return  1.5
             case "explore_full":      return  0.0
             case "explore_lite":      return  0.0
             case "stressed_critical": return -4.0
@@ -99,8 +125,8 @@ Item {
             case "rest_light":        return  1.5
             case "idle":              return  0.0
             case "alert":             return -2.0
-            case "explore_full":      return -4.0
-            case "explore_lite":      return -2.0
+            case "explore_full":      return -3.0
+            case "explore_lite":      return -1.5
             case "stressed_critical": return  2.0
             case "stressed_mild":     return  1.0
             default:                  return  0.0
@@ -109,8 +135,6 @@ Item {
 
     // ----------------------------------------------------------------
     // Phase 2 — Pressure-Reactive Flinch ("Pulse") scale offset
-    // animPulse > 0.3 fires a crisp outward scale burst then decays.
-    // Mate-Engine: audio BPM peak → dance burst.
     // ----------------------------------------------------------------
     property real pulseScaleExtra: 0.0
     property real _pulsePeak:      0.0
@@ -136,7 +160,6 @@ Item {
 
     SequentialAnimation {
         id: pulseBurst
-        // Sharp outward burst
         NumberAnimation {
             target: animLayer
             property: "pulseScaleExtra"
@@ -144,7 +167,6 @@ Item {
             duration: 70
             easing.type: Easing.OutQuad
         }
-        // Slow organic decay
         NumberAnimation {
             target: animLayer
             property: "pulseScaleExtra"
@@ -153,16 +175,12 @@ Item {
             easing.type: Easing.InOutSine
         }
         onRunningChanged: {
-            if (!running) {
-                animLayer._pulsePeak = 0.0
-            }
+            if (!running) animLayer._pulsePeak = 0.0
         }
     }
 
     // ----------------------------------------------------------------
     // Phase 3 — Exploration "Dance" Pulse
-    // Rhythmic breathing scale when exploring at high tier.
-    // Mate-Engine: dance animation looping during audio-reactive mode.
     // ----------------------------------------------------------------
     property real danceScaleExtra: 0.0
 
@@ -181,7 +199,6 @@ Item {
 
     // ----------------------------------------------------------------
     // Phase 2b — Stress tremor (micro-rotation jitter)
-    // High-frequency jitter when vm.stress > 0.75, tier >= 2.
     // ----------------------------------------------------------------
     property real tremorRotExtra: 0.0
 
@@ -200,18 +217,17 @@ Item {
     }
 
     // ----------------------------------------------------------------
-    // Phase 4 — Idle Sub-Cycle System
-    // Mate-Engine: randomised idle animation timing (AnimationChangeTime).
-    // Random stretch + head-tilt micro-animations fire while idle, tier >= 2.
+    // Phase 4 — Idle Sub-Cycle System (pauses during walking / peeking)
     // ----------------------------------------------------------------
     property real idleSubYExtra:     0.0
     property real idleSubScaleExtra: 0.0
     property real idleSubRotExtra:   0.0
-    property int  idleSubPause:      3000   // re-rolled each cycle [2000–6000 ms]
+    property int  idleSubPause:      3000
 
     SequentialAnimation {
         id: idleSubcycle
-        running: vm.animState === "idle" && !vm.dormant && vm.qualityTier >= 2 && !animLayer.dragging
+        running: vm.animState === "idle" && !vm.dormant && vm.qualityTier >= 2 &&
+                 !animLayer.dragging && !vm.isWalking && vm.edgePeekSide === 0
         loops:   Animation.Infinite
 
         onRunningChanged: {
@@ -222,10 +238,8 @@ Item {
             }
         }
 
-        // --- neutral hold (random dwell — Mate-Engine: AnimationChangeTime) ---
         PauseAnimation { duration: animLayer.idleSubPause }
 
-        // --- sub-state A: gentle float-up + stretch swell (1.0 → 1.04) ---
         ParallelAnimation {
             NumberAnimation {
                 target: animLayer; property: "idleSubYExtra"
@@ -238,7 +252,6 @@ Item {
         }
         PauseAnimation { duration: 450 }
 
-        // --- sub-state B: subtle head-tilt look (0 → 3 → -2 → 0) & settle ---
         ParallelAnimation {
             NumberAnimation {
                 target: animLayer; property: "idleSubRotExtra"
@@ -264,7 +277,6 @@ Item {
             }
         }
 
-        // Re-roll the random pause on each cycle (bounded [2000, 6000])
         ScriptAction {
             script: {
                 animLayer.idleSubPause = Math.round(2000 + Math.random() * 4000)
@@ -273,14 +285,14 @@ Item {
     }
 
     // ----------------------------------------------------------------
-    // Complementary base animations (moved from Main.qml to avoid
-    // binding conflicts on catBody)
+    // Complementary curiosity bounce & dormant breath
     // ----------------------------------------------------------------
     property real curiousBounceExtra: 0.0
 
     SequentialAnimation {
         id: curiousBounceAnim
-        running: vm.curiosity > 0.65 && !vm.dormant && !animLayer.dragging
+        running: vm.curiosity > 0.65 && !vm.dormant && !animLayer.dragging &&
+                 !vm.isWalking && vm.edgePeekSide === 0
         loops:   Animation.Infinite
         onRunningChanged: if (!running) animLayer.curiousBounceExtra = 0.0
 
@@ -302,6 +314,46 @@ Item {
     }
 
     // ----------------------------------------------------------------
+    // Phase 5 — Procedural Walking Gait, Facing Flip, Sitting & Edge Peek
+    // ----------------------------------------------------------------
+    readonly property real walkActive: vm.dormant ? 0.0 : vm.walkIntensity
+    readonly property real stepArc:    Math.abs(Math.sin(vm.walkPhase))
+    readonly property real hopAmplitude: {
+        if (vm.animState === "explore_full") return 9.5 * hopGain
+        if (vm.animState === "explore_lite") return 6.5 * hopGain
+        return 4.5 * hopGain
+    }
+    readonly property real walkYExtra:    -stepArc * hopAmplitude * walkActive
+    readonly property real walkXExtra:    Math.cos(vm.walkPhase) * 2.5 * walkActive
+    readonly property real walkTiltExtra: ((vm.facingDir * 5.0 * leanGain) + Math.sin(vm.walkPhase) * 4.5 * waddleGain) * walkActive
+    readonly property real walkSquashWave: Math.cos(2.0 * vm.walkPhase) * 0.05 * squashGain * walkActive
+
+    // Facing horizontal mirror applied to catImage (1.0 right, -1.0 left)
+    property real _facingTarget: vm.facingDir < 0 ? -1.0 : 1.0
+    Behavior on _facingTarget {
+        enabled: animLayer.xfadeDuration > 0
+        NumberAnimation { duration: 150; easing.type: Easing.InOutQuad }
+    }
+
+    // Sitting on taskbar pose (Mate-Engine AvatarTaskbarController analog)
+    property real _sitYExtra:    (vm.isSitting && !vm.dormant && !dragging) ?  6.0 : 0.0
+    property real _sitSquashX:   (vm.isSitting && !vm.dormant && !dragging) ?  0.06 : 0.0
+    property real _sitSquashY:   (vm.isSitting && !vm.dormant && !dragging) ? -0.06 : 0.0
+    Behavior on _sitYExtra  { enabled: animLayer.xfadeDuration > 0; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on _sitSquashX { enabled: animLayer.xfadeDuration > 0; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+    Behavior on _sitSquashY { enabled: animLayer.xfadeDuration > 0; NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+
+    // Screen-edge peek pose (Mate-Engine AvatarHideHandler analog)
+    property real _peekRotExtra: (vm.edgePeekSide !== 0 && !vm.dormant && !dragging)
+                                     ? ((vm.edgePeekSide < 0) ? 14.0 : -14.0)
+                                     : 0.0
+    property real _peekXExtra:   (vm.edgePeekSide !== 0 && !vm.dormant && !dragging)
+                                     ? ((vm.edgePeekSide < 0) ? 4.0 : -4.0)
+                                     : 0.0
+    Behavior on _peekRotExtra { enabled: animLayer.xfadeDuration > 0; NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+    Behavior on _peekXExtra   { enabled: animLayer.xfadeDuration > 0; NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+    // ----------------------------------------------------------------
     // Smooth crossfade intermediates + final compound outputs
     // ----------------------------------------------------------------
     property real _baseScale:    targetScale
@@ -321,8 +373,12 @@ Item {
         NumberAnimation { duration: animLayer.xfadeDuration; easing.type: Easing.OutCubic }
     }
 
-    // Public output properties — parent's catBody binds to these
-    readonly property real bodyScale:    _baseScale    + pulseScaleExtra + danceScaleExtra + idleSubScaleExtra + dormantBreathExtra
-    readonly property real bodyRotation: _baseRotation + tremorRotExtra  + idleSubRotExtra
-    readonly property real bodyYOffset:  _baseYOffset  + idleSubYExtra   + curiousBounceExtra
+    // Public output properties — parent's catBody and catImage bind to these
+    readonly property real bodyScale:    _baseScale + pulseScaleExtra + danceScaleExtra + idleSubScaleExtra + dormantBreathExtra
+    readonly property real squashScaleX: Math.max(0.75, 1.0 + walkSquashWave + _sitSquashX)
+    readonly property real squashScaleY: Math.max(0.75, 1.0 - walkSquashWave + _sitSquashY)
+    readonly property real facingScaleX: _facingTarget
+    readonly property real bodyRotation: _baseRotation + tremorRotExtra + idleSubRotExtra + walkTiltExtra + vm.swayRotation + vm.gazeLean + _peekRotExtra
+    readonly property real bodyXOffset:  vm.swayOffsetX + vm.gazeShiftX + walkXExtra + _peekXExtra
+    readonly property real bodyYOffset:  _baseYOffset + idleSubYExtra + curiousBounceExtra + walkYExtra + vm.swayOffsetY + _sitYExtra
 }
