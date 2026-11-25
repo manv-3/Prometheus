@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **proposed design**. Nothing here is implemented yet. Items marked *(proposed)* are not in the original report and need ratification in Phase 0.
+> Status: **MVP implemented** (with Phase 5 view-layer locomotion/animation). Some items below represent early target structure alongside implemented modules (`include/prometheus/common/`, `src/`).
 
 ## 1. Overview
 
@@ -143,16 +143,17 @@ CREATE TABLE checkpoints (id INTEGER PRIMARY KEY, timestamp INTEGER, state_blob 
 
 ## 10. Body, rendering and Qt/QML
 
-- Progression: QML shapes/Canvas → bounded C++ particle pool → `ShaderEffect` only when justified → custom C++ rendering only if profiling demands it.
-- **Fixed-capacity particle pool:** activate/deactivate entries, no per-frame allocation. The active count follows the budget; allocated capacity does not change.
-- Visual form reflects real state: active = fluid and more particles; stressed = contracted and slower; dormant = compact and nearly static.
-- C++/QML boundary: a narrow `QObject` ViewModel with read-only `Q_PROPERTY`s and change notifications. QML never touches simulation objects or Windows handles.
+- **Fixed-capacity particle pool (`src/body/ParticleSystem.cpp`):** activate/deactivate entries via O(1) swap-with-last, no per-frame allocation (`kMaxParticles == 1000`). Active count obeys `budget.max_particles`.
+- **Visual form reflects real state:** active/exploring = larger size, orbiting particles, lively dance & patrol; stressed = contracted pulse, tremor, walking suppressed; dormant = compact, greyscale `ShaderEffect`, slow breathing, locomotion and timers stopped.
+- **View-layer animation & locomotion (`src/ui/`, `resources/qml/`):** `OrganismViewModel` exposes read-only snapshot `Q_PROPERTY`s plus view-layer `animState`, `animPulse`, `CharacterPanel` presets/custom local images (`QSettings`), and `LocomotionEngine` (autonomous desktop walking, procedural stride gait, velocity spring sway, cursor gaze, monitor-edge peek, and taskbar sitting) throttled to `budget.target_render_hz`. See [animation-spec.md](animation-spec.md).
+- **C++/QML boundary:** a narrow `QObject` ViewModel (`OrganismViewModel`) receives `std::shared_ptr<const OrganismSnapshot>` via `Qt::QueuedConnection`. QML never touches simulation objects, SQLite, or Windows sensor handles.
 
 ## 11. Windows desktop integration
 
-- Transparent, frameless window; configurable always-on-top; drag positioning; multi-monitor awareness.
-- Optional click-through for non-interactive regions; interactive when the organism is selected. Do not make the whole window permanently click-through.
-- Optional startup behaviour and user-controlled visibility.
+- Transparent, frameless, always-on-top tool window (`Main.qml`); drag positioning with damped spring sway (`LocomotionEngine`).
+- Multi-monitor work-area awareness via Qt `Screen.desktopAvailable*` for autonomous desktop walking (`[M]` toggle), monitor-edge peek snapping, and taskbar-edge sitting.
+- Keyboard/mouse controls: `[C]` Companion Skin panel (`CharacterPanel.qml`), `[M]` Move toggle, `[D]` / right-click Developer Diagnostics overlay, `[Esc]` dismiss open panels.
+- Optional startup behaviour and click-through regions remain future enhancements.
 
 ## 12. Sensor failure behaviour
 

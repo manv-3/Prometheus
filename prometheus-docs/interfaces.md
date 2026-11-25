@@ -1,6 +1,9 @@
 # Interfaces and Data Contracts
 
-> **Status: PROPOSED. Phase 0 must ratify and freeze these.** The original report uses `OrganismState` without defining it and leaves several details open; the definitions below fill those gaps and are marked *(proposed)*.
+> **Status: RATIFIED (Provisional Team Contract, `kContractVersion = 2`).**  
+> The authoritative C++20 headers live in [`include/prometheus/common/`](../include/prometheus/common/):  
+> `HostObservation.hpp`, `OrganismState.hpp`, `ComputeBudget.hpp`, and `OrganismSnapshot.hpp`.  
+> The original Phase 0 design sketches below are retained for reference alongside the implemented enum values (`Behaviour`: `Dormant, Resting, Idle, Observing, Exploring, Stressed`; `QualityTier`: `Tier0_Dormant .. Tier4_Optimal`). Any breaking change requires two-dev approval and bumping `kContractVersion`.
 
 ## 1. Cross-cutting rules *(proposed)*
 

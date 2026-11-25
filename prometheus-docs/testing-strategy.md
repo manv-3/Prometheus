@@ -22,6 +22,7 @@ Goal: prove the causal chain **pressure → behaviour → budget → bounded wor
 | Determinism | Identical state + observation sequence + time deltas ⇒ identical decisions (replay test) |
 | Particle pool | Capacity fixed; active count ≤ budget; no allocation after init |
 | Persistence | Save/load round-trip; schema version handling |
+| UI & Locomotion | `animState` mapping, `animPulse` spike/decay, dormancy suppression, `LocomotionEngine` determinism/edge-turn/spring-sway/gaze/taskbar-sit, character & locomotion `QSettings` persistence |
 
 ## 3. Integration tests
 
@@ -51,10 +52,14 @@ Provide named, reusable curves: `steady-low`, `ramp-up`, `spike`, `plateau-high`
 
 ## 6. Tooling and CI
 
-- GoogleTest for C++ unit/integration tests; run via CTest.
-- CI: build + test on Windows for every PR; `main` must stay green.
-- Warnings as errors on new code; consider sanitizers (ASan/UBSan where supported) for logic modules.
-- Visual/UI behaviour checked manually plus the observer panel; automate what is cheap.
+- GoogleTest (`v1.15.2` via `FetchContent`) for C++ unit tests; run via `ctest --preset windows-mingw-debug --output-on-failure`.
+- Current CTest executables (`tests/CMakeLists.txt`, 145 tests total):
+  - `prometheus_brain_tests` (`test_ema_filter.cpp`, `test_pressure_estimator.cpp`, `test_homeostasis_engine.cpp`, `test_behaviour_fsm.cpp`)
+  - `prometheus_body_tests` (`test_particle_system.cpp`)
+  - `prometheus_metabolism_tests` (`test_metabolism.cpp`)
+  - `prometheus_memory_tests` (`test_memory_manager.cpp`)
+  - `prometheus_ui_tests` (`test_organism_viewmodel.cpp`, `test_locomotion_engine.cpp`)
+- Visual/UI behaviour checked manually via `--synthetic` plus the `[D]` diagnostics panel.
 
 ## 7. Exit gates
 

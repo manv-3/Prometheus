@@ -17,18 +17,20 @@ The demo must show a **causal chain** from host pressure → organism behaviour 
 
 ## Observer / developer panel
 
-Separate diagnostics panel judges can open. Show:
+Separate diagnostics panel (`[D]` or right-click in `Main.qml`) judges can open. Shows:
 
-- **Simulated organism variables:** state/behaviour, energy, stress, adaptation, age, quality tier
-- **Measured host values:** CPU, available RAM
-- **Measured self-cost:** simulation Hz, render FPS, active particles, process CPU/working set
-- A clear visual separation between *measured* and *simulated*, and a **LIVE / SYNTHETIC** badge
+- **Simulated organism variables:** Character name, energy, health, stress, curiosity, adaptation, behaviour, quality tier
+- **Animation & locomotion state:** `AnimState`, `Pulse`, `Dragging`, `XFade`, `Move` (`LocomotionMode`, sitting/peek flag, facing direction), `WalkCtrl` (`ON`/`OFF` + screen coordinates)
+- **Measured host values:** CPU %, RAM %, pressure (with red invalid indicator when `valid == false`)
+- **Measured self-cost:** active particles, simulation Hz, age, and **LIVE / SYNTHETIC** badge (plus top-right yellow `SYNTHETIC` badge in `--synthetic` mode)
+
+Quick UX controls during live demo: `[C]` switches companion skin (`CharacterPanel.qml`), `[M]` toggles autonomous desktop walking (`LocomotionEngine`), `[D]` toggles diagnostics, and dragging demonstrates spring sway, screen-edge peek, and taskbar sitting.
 
 ## Reliability plan
 
-- [ ] Synthetic telemetry mode so the demo never depends on destabilizing the host (labelled)
-- [ ] Controlled stress tool with a **safe stop** and duration cap
-- [ ] Live process metrics (Performance Monitor or in-app), not only scripted visuals
+- [x] Synthetic telemetry mode (`--synthetic`) so the demo never depends on destabilizing the host (labelled)
+- [x] Controlled stress tool (`scripts/demo-stress.ps1` + `scripts/stress-worker.ps1`) with a **safe stop** and duration cap
+- [x] Live process metrics (`scripts/demo-stress.ps1` and `scripts/benchmark.ps1` sample `prometheus_app` directly), not only scripted visuals
 - [ ] Recorded backup demo in case hardware/display misbehaves (labelled prerecorded)
 - [ ] Rehearsed on the actual presentation machine and display setup
 - [ ] Fresh-database run and pre-seeded-database run both tested
