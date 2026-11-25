@@ -1,6 +1,7 @@
 #pragma once
 
 #include "prometheus/common/OrganismSnapshot.hpp"
+#include "prometheus/ui/LocomotionEngine.hpp"
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -36,8 +37,9 @@ class OrganismViewModel : public QObject {
     // ---- Behaviour string ----
     Q_PROPERTY(QString behaviour   READ behaviour     NOTIFY snapshotChanged)
 
-    // ---- Quality tier (int 0–4) ----
+    // ---- Quality tier & budget hint (int 0–4) ----
     Q_PROPERTY(int qualityTier     READ qualityTier   NOTIFY snapshotChanged)
+    Q_PROPERTY(int targetRenderHz  READ targetRenderHz NOTIFY snapshotChanged)
 
     // ---- Simulation metrics ----
     Q_PROPERTY(int   activeParticles READ activeParticles NOTIFY snapshotChanged)
@@ -78,6 +80,24 @@ class OrganismViewModel : public QObject {
     Q_PROPERTY(QString      customCharacterSource READ customCharacterSource NOTIFY characterChanged)
     Q_PROPERTY(QVariantList availableCharacters   READ availableCharacters   CONSTANT)
 
+    // ---- Locomotion & moving animations (Phase 5 — Mate-Engine locomotion/sway/gaze) ----
+    Q_PROPERTY(bool    locomotionEnabled   READ locomotionEnabled   WRITE setLocomotionEnabled NOTIFY locomotionConfigChanged)
+    Q_PROPERTY(QString locomotionMode      READ locomotionMode      NOTIFY locomotionChanged)
+    Q_PROPERTY(bool    isWalking           READ isWalking           NOTIFY locomotionChanged)
+    Q_PROPERTY(int     facingDir           READ facingDir           NOTIFY locomotionChanged)
+    Q_PROPERTY(float   walkPhase           READ walkPhase           NOTIFY locomotionChanged)
+    Q_PROPERTY(float   walkIntensity       READ walkIntensity       NOTIFY locomotionChanged)
+    Q_PROPERTY(float   walkSpeed           READ walkSpeed           NOTIFY locomotionChanged)
+    Q_PROPERTY(float   swayRotation        READ swayRotation        NOTIFY locomotionChanged)
+    Q_PROPERTY(float   swayOffsetX         READ swayOffsetX         NOTIFY locomotionChanged)
+    Q_PROPERTY(float   swayOffsetY         READ swayOffsetY         NOTIFY locomotionChanged)
+    Q_PROPERTY(float   gazeLean            READ gazeLean            NOTIFY locomotionChanged)
+    Q_PROPERTY(float   gazeShiftX          READ gazeShiftX          NOTIFY locomotionChanged)
+    Q_PROPERTY(int     edgePeekSide        READ edgePeekSide        NOTIFY locomotionChanged)
+    Q_PROPERTY(bool    isSitting           READ isSitting           NOTIFY locomotionChanged)
+    Q_PROPERTY(bool    locomotionNeedsTick READ locomotionNeedsTick NOTIFY locomotionChanged)
+    Q_PROPERTY(float   targetWindowX       READ targetWindowX       NOTIFY locomotionChanged)
+
 public:
     explicit OrganismViewModel(QObject* parent = nullptr);
     OrganismViewModel(bool enablePersistence,
@@ -92,6 +112,7 @@ public:
     [[nodiscard]] float   pressure()        const noexcept;
     [[nodiscard]] QString behaviour()       const noexcept;
     [[nodiscard]] int     qualityTier()     const noexcept;
+    [[nodiscard]] int     targetRenderHz()  const noexcept;
     [[nodiscard]] int     activeParticles() const noexcept;
     [[nodiscard]] float   measuredSimHz()   const noexcept;
     [[nodiscard]] float   simTimeSeconds()  const noexcept;
@@ -115,12 +136,62 @@ public:
     Q_INVOKABLE bool selectCharacter(const QString& characterId);
     Q_INVOKABLE bool selectCustomCharacter(const QString& filePathOrUrl);
 
+    [[nodiscard]] bool    locomotionEnabled()   const noexcept;
+    [[nodiscard]] QString locomotionMode()      const;
+    [[nodiscard]] bool    isWalking()           const noexcept;
+    [[nodiscard]] int     facingDir()           const noexcept;
+    [[nodiscard]] float   walkPhase()           const noexcept;
+    [[nodiscard]] float   walkIntensity()       const noexcept;
+    [[nodiscard]] float   walkSpeed()           const noexcept;
+    [[nodiscard]] float   swayRotation()        const noexcept;
+    [[nodiscard]] float   swayOffsetX()         const noexcept;
+    [[nodiscard]] float   swayOffsetY()         const noexcept;
+    [[nodiscard]] float   gazeLean()            const noexcept;
+    [[nodiscard]] float   gazeShiftX()          const noexcept;
+    [[nodiscard]] int     edgePeekSide()        const noexcept;
+    [[nodiscard]] bool    isSitting()           const noexcept;
+    [[nodiscard]] bool    locomotionNeedsTick() const noexcept;
+    [[nodiscard]] float   targetWindowX()       const noexcept;
+
+    Q_INVOKABLE void setLocomotionEnabled(bool enabled);
+    Q_INVOKABLE void toggleLocomotion();
+    Q_INVOKABLE bool stepLocomotion(float dtSeconds,
+                                    float windowX,
+                                    float windowY,
+                                    float stageWidth,
+                                    float stageHeight,
+                                    float charBottomOffsetY,
+                                    float workLeft,
+                                    float workTop,
+                                    float workWidth,
+                                    float workHeight,
+                                    bool  dragging,
+                                    bool  interactionBlocked);
+
+    bool stepLocomotionWithCursor(float dtSeconds,
+                                  float windowX,
+                                  float windowY,
+                                  float stageWidth,
+                                  float stageHeight,
+                                  float charBottomOffsetY,
+                                  float workLeft,
+                                  float workTop,
+                                  float workWidth,
+                                  float workHeight,
+                                  bool  dragging,
+                                  bool  interactionBlocked,
+                                  float cursorX,
+                                  float cursorY,
+                                  bool  cursorValid);
+
 public slots:
     void onSnapshotPublished(std::shared_ptr<const common::OrganismSnapshot> snapshot);
 
 signals:
     void snapshotChanged();
     void characterChanged();
+    void locomotionChanged();
+    void locomotionConfigChanged();
 
 private:
     void loadCharacterPreference();
@@ -136,6 +207,10 @@ private:
     QString settingsFilePath_;
     QString characterId_{QStringLiteral("cat")};
     QString customCharacterPath_;
+
+    LocomotionEngine locomotion_{};
+    LocomotionOutput locomotionOut_{};
+    bool             locomotionEnabled_{true};
 };
 
 } // namespace prometheus::ui

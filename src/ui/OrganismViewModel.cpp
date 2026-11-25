@@ -1,5 +1,7 @@
 #include "prometheus/ui/OrganismViewModel.hpp"
+#include <QCursor>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QMetaType>
 #include <QSettings>
 #include <QUrl>
@@ -159,6 +161,29 @@ float computeAnimPulse(float currentPressure,
     return std::clamp(std::max(tickSpike, baselineRise), 0.0f, 1.0f);
 }
 
+bool nearlyEqual(float a, float b, float eps = 1e-4f) noexcept {
+    return std::abs(a - b) <= eps;
+}
+
+bool locomotionOutputsEqual(const LocomotionOutput& a, const LocomotionOutput& b) noexcept {
+    return a.mode == b.mode &&
+           a.shouldMoveWindow == b.shouldMoveWindow &&
+           nearlyEqual(a.targetWindowX, b.targetWindowX, 0.25f) &&
+           a.isWalking == b.isWalking &&
+           a.facingDir == b.facingDir &&
+           nearlyEqual(a.walkPhase, b.walkPhase, 1e-3f) &&
+           nearlyEqual(a.walkIntensity, b.walkIntensity, 1e-3f) &&
+           nearlyEqual(a.walkSpeedPxPerSec, b.walkSpeedPxPerSec, 0.1f) &&
+           nearlyEqual(a.swayRotationDeg, b.swayRotationDeg, 1e-2f) &&
+           nearlyEqual(a.swayOffsetX, b.swayOffsetX, 1e-2f) &&
+           nearlyEqual(a.swayOffsetY, b.swayOffsetY, 1e-2f) &&
+           nearlyEqual(a.gazeLeanDeg, b.gazeLeanDeg, 1e-2f) &&
+           nearlyEqual(a.gazeShiftX, b.gazeShiftX, 1e-2f) &&
+           a.edgePeekSide == b.edgePeekSide &&
+           a.isSitting == b.isSitting &&
+           a.needsContinuousTick == b.needsContinuousTick;
+}
+
 } // namespace
 
 OrganismViewModel::OrganismViewModel(QObject* parent)
@@ -197,6 +222,8 @@ void OrganismViewModel::loadCharacterPreference() {
     } else {
         characterId_ = QStringLiteral("cat");
     }
+
+    locomotionEnabled_ = settings->value(QStringLiteral("ui/locomotionEnabled"), true).toBool();
 }
 
 void OrganismViewModel::saveCharacterPreference() const {
@@ -204,6 +231,7 @@ void OrganismViewModel::saveCharacterPreference() const {
     const auto settings = makeSettings(settingsFilePath_);
     settings->setValue(QStringLiteral("ui/characterId"), characterId_);
     settings->setValue(QStringLiteral("ui/customCharacterPath"), customCharacterPath_);
+    settings->setValue(QStringLiteral("ui/locomotionEnabled"), locomotionEnabled_);
     settings->sync();
 }
 
@@ -238,7 +266,22 @@ void OrganismViewModel::onSnapshotPublished(
     }
 
     snapshot_ = std::move(snapshot);
+
+    bool locomotionDirty = false;
+    if (isDormant && (locomotionOut_.isWalking || locomotionOut_.needsContinuousTick || locomotionOut_.walkIntensity > 0.0f)) {
+        LocomotionInput resetIn{};
+        resetIn.dormant = true;
+        resetIn.tier = snapshot_->budget.tier;
+        resetIn.behaviour = snapshot_->state.current_behaviour;
+        const LocomotionOutput next = locomotion_.step(resetIn);
+        locomotionDirty = !locomotionOutputsEqual(locomotionOut_, next);
+        locomotionOut_ = next;
+    }
+
     emit snapshotChanged();
+    if (locomotionDirty) {
+        emit locomotionChanged();
+    }
 }
 
 // ---- Drives ----
@@ -257,6 +300,14 @@ QString OrganismViewModel::behaviour() const noexcept {
 // ---- Budget / tier ----
 int OrganismViewModel::qualityTier() const noexcept {
     return static_cast<int>(snapshot_->budget.tier);
+}
+
+int OrganismViewModel::targetRenderHz() const noexcept {
+    const uint32_t hz = std::clamp(
+        snapshot_->budget.target_render_hz,
+        common::ComputeBudget::HARD_MIN_RENDER_HZ,
+        common::ComputeBudget::HARD_MAX_RENDER_HZ);
+    return static_cast<int>(hz);
 }
 
 // ---- Simulation metrics ----
@@ -384,6 +435,115 @@ bool OrganismViewModel::selectCustomCharacter(const QString& filePathOrUrl) {
         emit characterChanged();
     }
     return true;
+}
+
+// ---- Locomotion & moving animations ----
+bool OrganismViewModel::locomotionEnabled() const noexcept {
+    return locomotionEnabled_;
+}
+
+QString OrganismViewModel::locomotionMode() const {
+    return QString::fromLatin1(locomotionModeToString(locomotionOut_.mode));
+}
+
+bool OrganismViewModel::isWalking() const noexcept { return locomotionOut_.isWalking; }
+int OrganismViewModel::facingDir() const noexcept { return locomotionOut_.facingDir; }
+float OrganismViewModel::walkPhase() const noexcept { return locomotionOut_.walkPhase; }
+float OrganismViewModel::walkIntensity() const noexcept { return locomotionOut_.walkIntensity; }
+float OrganismViewModel::walkSpeed() const noexcept { return locomotionOut_.walkSpeedPxPerSec; }
+float OrganismViewModel::swayRotation() const noexcept { return locomotionOut_.swayRotationDeg; }
+float OrganismViewModel::swayOffsetX() const noexcept { return locomotionOut_.swayOffsetX; }
+float OrganismViewModel::swayOffsetY() const noexcept { return locomotionOut_.swayOffsetY; }
+float OrganismViewModel::gazeLean() const noexcept { return locomotionOut_.gazeLeanDeg; }
+float OrganismViewModel::gazeShiftX() const noexcept { return locomotionOut_.gazeShiftX; }
+int OrganismViewModel::edgePeekSide() const noexcept { return locomotionOut_.edgePeekSide; }
+bool OrganismViewModel::isSitting() const noexcept { return locomotionOut_.isSitting; }
+bool OrganismViewModel::locomotionNeedsTick() const noexcept { return locomotionOut_.needsContinuousTick; }
+float OrganismViewModel::targetWindowX() const noexcept { return locomotionOut_.targetWindowX; }
+
+void OrganismViewModel::setLocomotionEnabled(bool enabled) {
+    if (locomotionEnabled_ == enabled) return;
+    locomotionEnabled_ = enabled;
+    saveCharacterPreference();
+    emit locomotionConfigChanged();
+}
+
+void OrganismViewModel::toggleLocomotion() {
+    setLocomotionEnabled(!locomotionEnabled_);
+}
+
+bool OrganismViewModel::stepLocomotion(float dtSeconds,
+                                       float windowX,
+                                       float windowY,
+                                       float stageWidth,
+                                       float stageHeight,
+                                       float charBottomOffsetY,
+                                       float workLeft,
+                                       float workTop,
+                                       float workWidth,
+                                       float workHeight,
+                                       bool  dragging,
+                                       bool  interactionBlocked) {
+    float cursorX = 0.0f;
+    float cursorY = 0.0f;
+    bool cursorValid = false;
+    if (QGuiApplication::instance() != nullptr) {
+        const QPoint pos = QCursor::pos();
+        cursorX = static_cast<float>(pos.x());
+        cursorY = static_cast<float>(pos.y());
+        cursorValid = true;
+    }
+    return stepLocomotionWithCursor(
+        dtSeconds, windowX, windowY, stageWidth, stageHeight, charBottomOffsetY,
+        workLeft, workTop, workWidth, workHeight, dragging, interactionBlocked,
+        cursorX, cursorY, cursorValid);
+}
+
+bool OrganismViewModel::stepLocomotionWithCursor(float dtSeconds,
+                                                 float windowX,
+                                                 float windowY,
+                                                 float stageWidth,
+                                                 float stageHeight,
+                                                 float charBottomOffsetY,
+                                                 float workLeft,
+                                                 float workTop,
+                                                 float workWidth,
+                                                 float workHeight,
+                                                 bool  dragging,
+                                                 bool  interactionBlocked,
+                                                 float cursorX,
+                                                 float cursorY,
+                                                 bool  cursorValid) {
+    LocomotionInput in{};
+    in.dtSeconds = dtSeconds;
+    in.behaviour = snapshot_->state.current_behaviour;
+    in.tier = snapshot_->budget.tier;
+    in.dormant = snapshot_->dormant || (snapshot_->state.current_behaviour == common::Behaviour::Dormant);
+    in.energy = snapshot_->state.energy;
+    in.curiosity = snapshot_->state.curiosity;
+    in.stress = snapshot_->state.stress;
+    in.locomotionEnabled = locomotionEnabled_;
+    in.dragging = dragging;
+    in.interactionBlocked = interactionBlocked;
+    in.windowX = windowX;
+    in.windowY = windowY;
+    in.stageWidth = stageWidth;
+    in.stageHeight = stageHeight;
+    in.charBottomOffsetY = charBottomOffsetY;
+    in.workLeft = workLeft;
+    in.workTop = workTop;
+    in.workWidth = workWidth;
+    in.workHeight = workHeight;
+    in.cursorX = cursorX;
+    in.cursorY = cursorY;
+    in.cursorValid = cursorValid;
+
+    const LocomotionOutput prev = locomotionOut_;
+    locomotionOut_ = locomotion_.step(in);
+    if (!locomotionOutputsEqual(prev, locomotionOut_)) {
+        emit locomotionChanged();
+    }
+    return locomotionOut_.shouldMoveWindow;
 }
 
 } // namespace prometheus::ui
