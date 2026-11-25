@@ -45,3 +45,16 @@ target_link_libraries(prometheus_memory_tests PRIVATE
     GTest::gtest_main
 )
 gtest_discover_tests(prometheus_memory_tests)
+
+# ---- UI / ViewModel tests (Dev C) ----
+find_package(Qt6 REQUIRED COMPONENTS Test)
+add_executable(prometheus_ui_tests
+    ui/test_organism_viewmodel.cpp
+)
+target_link_libraries(prometheus_ui_tests PRIVATE
+    prometheus_ui
+    Qt6::Test
+    GTest::gtest
+    GTest::gtest_main
+)
+gtest_discover_tests(prometheus_ui_tests)
