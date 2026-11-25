@@ -13,6 +13,11 @@ namespace prometheus::ui {
  * Receives immutable OrganismSnapshots from the simulation thread via a
  * queued signal (never a direct call — REQ-UI-01). Exposes read-only
  * Q_PROPERTYs to QML. QML never touches simulation objects or Windows handles.
+ *
+ * Animation properties (animState, animPulse) are view-layer derived values
+ * computed inside the ViewModel from snapshot data. They do NOT affect
+ * OrganismState or any simulation contract — they are purely presentational.
+ * Inspired by Mate-Engine's AvatarAnimatorController state mapping.
  */
 class OrganismViewModel : public QObject {
     Q_OBJECT
@@ -48,6 +53,21 @@ class OrganismViewModel : public QObject {
     Q_PROPERTY(bool syntheticMode  READ syntheticMode NOTIFY snapshotChanged)
     Q_PROPERTY(bool dormant        READ dormant       NOTIFY snapshotChanged)
 
+    // ---- Animation state (view-layer derived — no simulation contract) ----
+    // animState: fine-grained animation key combining Behaviour + QualityTier.
+    //   Possible values: "dormant", "rest_deep", "rest_light", "idle",
+    //                    "alert", "explore_full", "explore_lite",
+    //                    "stressed_critical", "stressed_mild"
+    // Analogous to Mate-Engine's AvatarAnimatorController state names.
+    Q_PROPERTY(QString animState   READ animState     NOTIFY snapshotChanged)
+
+    // animPulse: magnitude of recent host-pressure spike [0.0, 1.0].
+    // Computed from upward pressure delta and rise above a trailing baseline,
+    // clamped to [0, 1] and suppressed while dormant.
+    // QML uses this to drive "flinch" reactions — analogous to Mate-Engine's
+    // audio-reactive dance mode (BPM spike → dance, pressure spike → flinch).
+    Q_PROPERTY(float animPulse     READ animPulse     NOTIFY snapshotChanged)
+
 public:
     explicit OrganismViewModel(QObject* parent = nullptr);
 
@@ -68,6 +88,8 @@ public:
     [[nodiscard]] bool    hostRamValid()    const noexcept;
     [[nodiscard]] bool    syntheticMode()   const noexcept;
     [[nodiscard]] bool    dormant()         const noexcept;
+    [[nodiscard]] QString animState()       const noexcept;
+    [[nodiscard]] float   animPulse()       const noexcept;
 
 public slots:
     void onSnapshotPublished(std::shared_ptr<const common::OrganismSnapshot> snapshot);
@@ -77,6 +99,10 @@ signals:
 
 private:
     std::shared_ptr<const common::OrganismSnapshot> snapshot_;
+    bool  hasBaseline_{false};     // avoids false startup pulse on first snapshot
+    float prevPressure_{0.0f};     // previous sanitized pressure for step-jump detection
+    float trailingPressure_{0.0f}; // slower trailing baseline for smoothed 30 Hz spikes
+    float animPulse_{0.0f};        // cached pulse value updated on each snapshot
 };
 
 } // namespace prometheus::ui
