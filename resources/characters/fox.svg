@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <radialGradient id="foxFurGrad" cx="48%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ff8533"/>
+      <stop offset="100%" stop-color="#d94b14"/>
+    </radialGradient>
+    <linearGradient id="foxCreamGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff8ef"/>
+      <stop offset="100%" stop-color="#f2dec4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fluffy curled tail -->
+  <path d="M138 148 C184 148 188 102 162 88 C144 78 128 98 134 124 Z" fill="url(#foxFurGrad)" stroke="#3d180c" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M162 88 C178 96 180 116 170 124 C162 114 152 108 144 108 C144 96 154 86 162 88 Z" fill="url(#foxCreamGrad)"/>
+
+  <!-- Body -->
+  <ellipse cx="100" cy="142" rx="44" ry="38" fill="url(#foxFurGrad)" stroke="#3d180c" stroke-width="4.5"/>
+  <ellipse cx="100" cy="148" rx="26" ry="26" fill="url(#foxCreamGrad)"/>
+
+  <!-- Ears -->
+  <path d="M48 76 L36 22 L84 52 Z" fill="#d94b14" stroke="#3d180c" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M152 76 L164 22 L116 52 Z" fill="#d94b14" stroke="#3d180c" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M40 36 L36 22 L52 32 Z" fill="#3d180c"/>
+  <path d="M160 36 L164 22 L148 32 Z" fill="#3d180c"/>
+  <path d="M54 68 L47 38 L75 56 Z" fill="#ffbfa8"/>
+  <path d="M146 68 L153 38 L125 56 Z" fill="#ffbfa8"/>
+
+  <!-- Head -->
+  <path d="M36 92 C36 56 66 44 100 44 C134 44 164 56 164 92 C164 118 132 134 100 134 C68 134 36 118 36 92 Z" fill="url(#foxFurGrad)" stroke="#3d180c" stroke-width="4.5"/>
+
+  <!-- White cheek ruffs -->
+  <path d="M38 96 C54 88 76 102 100 132 C68 132 42 118 38 96 Z" fill="url(#foxCreamGrad)"/>
+  <path d="M162 96 C146 88 124 102 100 132 C132 132 158 118 162 96 Z" fill="url(#foxCreamGrad)"/>
+
+  <!-- Eyes -->
+  <ellipse cx="75" cy="88" rx="9" ry="11" fill="#1f1410"/>
+  <ellipse cx="125" cy="88" rx="9" ry="11" fill="#1f1410"/>
+  <circle cx="72" cy="84" r="3.5" fill="#ffffff"/>
+  <circle cx="122" cy="84" r="3.5" fill="#ffffff"/>
+  <circle cx="78" cy="92" r="1.6" fill="#ffffff" opacity="0.8"/>
+  <circle cx="128" cy="92" r="1.6" fill="#ffffff" opacity="0.8"/>
+
+  <!-- Nose and smile -->
+  <ellipse cx="100" cy="108" rx="7" ry="5" fill="#2b1209"/>
+  <path d="M90 116 Q95 121 100 115 Q105 121 110 116" fill="none" stroke="#3d180c" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Paws -->
+  <ellipse cx="76" cy="174" rx="11" ry="7" fill="#3d180c"/>
+  <ellipse cx="124" cy="174" rx="11" ry="7" fill="#3d180c"/>
+</svg>

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="botShellGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8fa6c9"/>
+      <stop offset="100%" stop-color="#4e6285"/>
+    </linearGradient>
+    <linearGradient id="botVisorGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#192338"/>
+      <stop offset="100%" stop-color="#0d1320"/>
+    </linearGradient>
+    <radialGradient id="botGlowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7ef9ff"/>
+      <stop offset="100%" stop-color="#16b8f3"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Antenna -->
+  <line x1="100" y1="42" x2="100" y2="22" stroke="#2c3852" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="100" cy="17" r="8" fill="url(#botGlowGrad)" stroke="#1b263b" stroke-width="3"/>
+
+  <!-- Side ear pods -->
+  <rect x="24" y="64" width="16" height="36" rx="8" fill="#3b4c6b" stroke="#1b263b" stroke-width="4"/>
+  <rect x="160" y="64" width="16" height="36" rx="8" fill="#3b4c6b" stroke="#1b263b" stroke-width="4"/>
+
+  <!-- Head chassis -->
+  <rect x="36" y="42" width="128" height="80" rx="28" fill="url(#botShellGrad)" stroke="#1b263b" stroke-width="5"/>
+
+  <!-- Visor screen -->
+  <rect x="48" y="54" width="104" height="56" rx="18" fill="url(#botVisorGrad)" stroke="#2e4061" stroke-width="3"/>
+
+  <!-- Glowing digital eyes + happy arc mouth -->
+  <rect x="66" y="70" width="16" height="20" rx="8" fill="url(#botGlowGrad)"/>
+  <rect x="118" y="70" width="16" height="20" rx="8" fill="url(#botGlowGrad)"/>
+  <circle cx="71" cy="76" r="3" fill="#ffffff" opacity="0.85"/>
+  <circle cx="123" cy="76" r="3" fill="#ffffff" opacity="0.85"/>
+  <path d="M88 97 Q100 105 112 97" fill="none" stroke="#4de8ff" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Compact torso -->
+  <rect x="56" y="124" width="88" height="50" rx="20" fill="url(#botShellGrad)" stroke="#1b263b" stroke-width="5"/>
+
+  <!-- Chest core emblem -->
+  <polygon points="100,136 112,149 100,162 88,149" fill="url(#botGlowGrad)" stroke="#1b263b" stroke-width="3"/>
+
+  <!-- Floating side thrusters / hands -->
+  <ellipse cx="42" cy="148" rx="10" ry="14" fill="#3b4c6b" stroke="#1b263b" stroke-width="4"/>
+  <ellipse cx="158" cy="148" rx="10" ry="14" fill="#3b4c6b" stroke="#1b263b" stroke-width="4"/>
+
+  <!-- Hover shadow ring -->
+  <ellipse cx="100" cy="184" rx="34" ry="5" fill="#16b8f3" opacity="0.35"/>
+</svg>

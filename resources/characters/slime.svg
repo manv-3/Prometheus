@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <radialGradient id="slimeBodyGrad" cx="42%" cy="34%" r="65%">
+      <stop offset="0%" stop-color="#8ff7ec"/>
+      <stop offset="55%" stop-color="#29cbb8"/>
+      <stop offset="100%" stop-color="#11827d"/>
+    </radialGradient>
+    <radialGradient id="slimeCoreGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="45%" stop-color="#a8ff78"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Floating mini droplets -->
+  <circle cx="34" cy="78" r="8" fill="#5ce8da" stroke="#0d5c58" stroke-width="3"/>
+  <circle cx="168" cy="92" r="6" fill="#5ce8da" stroke="#0d5c58" stroke-width="3"/>
+  <circle cx="156" cy="52" r="4.5" fill="#9ffaf0" stroke="#0d5c58" stroke-width="2.5"/>
+
+  <!-- Gelatinous dome body -->
+  <path d="M32 132 C32 76 62 42 100 42 C138 42 168 76 168 132 C168 162 142 174 100 174 C58 174 32 162 32 132 Z" fill="url(#slimeBodyGrad)" stroke="#0d5c58" stroke-width="5"/>
+
+  <!-- Bioluminescent inner core -->
+  <circle cx="100" cy="128" r="28" fill="url(#slimeCoreGrad)" opacity="0.75"/>
+
+  <!-- Glossy top highlight -->
+  <ellipse cx="74" cy="70" rx="18" ry="9" transform="rotate(-24 74 70)" fill="#ffffff" opacity="0.65"/>
+  <circle cx="56" cy="86" r="4.5" fill="#ffffff" opacity="0.55"/>
+
+  <!-- Expressive eyes -->
+  <ellipse cx="76" cy="110" rx="8.5" ry="11" fill="#093836"/>
+  <ellipse cx="124" cy="110" rx="8.5" ry="11" fill="#093836"/>
+  <circle cx="73" cy="105" r="3.5" fill="#ffffff"/>
+  <circle cx="121" cy="105" r="3.5" fill="#ffffff"/>
+
+  <!-- Blush & smile -->
+  <ellipse cx="58" cy="122" rx="8" ry="4.5" fill="#ff8fa3" opacity="0.7"/>
+  <ellipse cx="142" cy="122" rx="8" ry="4.5" fill="#ff8fa3" opacity="0.7"/>
+  <path d="M90 120 Q100 129 110 120" fill="none" stroke="#093836" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

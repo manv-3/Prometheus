@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <radialGradient id="owlBodyGrad" cx="50%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#6b77b8"/>
+      <stop offset="100%" stop-color="#3a4273"/>
+    </radialGradient>
+    <linearGradient id="owlBellyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7efe2"/>
+      <stop offset="100%" stop-color="#ded1bc"/>
+    </linearGradient>
+    <linearGradient id="owlEyeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd55a"/>
+      <stop offset="100%" stop-color="#e89a1e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Wings -->
+  <ellipse cx="42" cy="118" rx="22" ry="44" transform="rotate(14 42 118)" fill="#2d345e" stroke="#1d2240" stroke-width="4"/>
+  <ellipse cx="158" cy="118" rx="22" ry="44" transform="rotate(-14 158 118)" fill="#2d345e" stroke="#1d2240" stroke-width="4"/>
+
+  <!-- Ear tufts -->
+  <path d="M46 56 L30 22 L68 42 Z" fill="#3a4273" stroke="#1d2240" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M154 56 L170 22 L132 42 Z" fill="#3a4273" stroke="#1d2240" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M48 50 L38 30 L62 43 Z" fill="#8b97d9"/>
+  <path d="M152 50 L162 30 L138 43 Z" fill="#8b97d9"/>
+
+  <!-- Main body -->
+  <ellipse cx="100" cy="108" rx="60" ry="66" fill="url(#owlBodyGrad)" stroke="#1d2240" stroke-width="5"/>
+
+  <!-- Belly plumage -->
+  <ellipse cx="100" cy="130" rx="40" ry="38" fill="url(#owlBellyGrad)"/>
+  <path d="M84 118 Q90 124 96 118 M104 118 Q110 124 116 118 M92 134 Q100 142 108 134 M80 146 Q88 152 96 146 M104 146 Q112 152 120 146" fill="none" stroke="#b9a88e" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Facial disc -->
+  <circle cx="76" cy="78" r="26" fill="#4f5a96" stroke="#242b52" stroke-width="3"/>
+  <circle cx="124" cy="78" r="26" fill="#4f5a96" stroke="#242b52" stroke-width="3"/>
+
+  <!-- Eyes -->
+  <circle cx="76" cy="78" r="18" fill="url(#owlEyeGrad)" stroke="#1d2240" stroke-width="3"/>
+  <circle cx="124" cy="78" r="18" fill="url(#owlEyeGrad)" stroke="#1d2240" stroke-width="3"/>
+  <circle cx="76" cy="78" r="10" fill="#171a2b"/>
+  <circle cx="124" cy="78" r="10" fill="#171a2b"/>
+  <circle cx="71" cy="72" r="4.5" fill="#ffffff"/>
+  <circle cx="119" cy="72" r="4.5" fill="#ffffff"/>
+  <circle cx="81" cy="83" r="2" fill="#ffffff" opacity="0.8"/>
+  <circle cx="129" cy="83" r="2" fill="#ffffff" opacity="0.8"/>
+
+  <!-- Beak -->
+  <path d="M92 88 L108 88 L100 104 Z" fill="#f5a623" stroke="#1d2240" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- Feet -->
+  <path d="M74 171 L68 182 M78 171 L78 183 M82 171 L88 182" stroke="#f5a623" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M118 171 L112 182 M122 171 L122 183 M126 171 L132 182" stroke="#f5a623" stroke-width="4.5" stroke-linecap="round"/>
+</svg>
