@@ -50,6 +50,7 @@ gtest_discover_tests(prometheus_memory_tests)
 find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(prometheus_ui_tests
     ui/test_organism_viewmodel.cpp
+    ui/test_locomotion_engine.cpp
 )
 target_link_libraries(prometheus_ui_tests PRIVATE
     prometheus_ui

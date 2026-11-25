@@ -251,4 +251,71 @@ TEST(OrganismViewModelTest, CharacterSelectionPersistsAcrossRestartAndFallsBackI
     }
 }
 
+TEST(OrganismViewModelTest, LocomotionDefaultsEnabledTogglesAndPersists) {
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    const QString iniPath = tempDir.filePath(QStringLiteral("locomotion.ini"));
+
+    {
+        OrganismViewModel vm1(true, iniPath);
+        EXPECT_TRUE(vm1.locomotionEnabled());
+        QSignalSpy spy(&vm1, &OrganismViewModel::locomotionConfigChanged);
+        vm1.toggleLocomotion();
+        EXPECT_EQ(spy.count(), 1);
+        EXPECT_FALSE(vm1.locomotionEnabled());
+    }
+    {
+        OrganismViewModel vm2(true, iniPath);
+        EXPECT_FALSE(vm2.locomotionEnabled());
+        vm2.setLocomotionEnabled(true);
+        EXPECT_TRUE(vm2.locomotionEnabled());
+    }
+}
+
+TEST(OrganismViewModelTest, TargetRenderHzReflectsClampedBudget) {
+    OrganismViewModel vm(false, QString());
+
+    auto snap = std::make_shared<OrganismSnapshot>();
+    snap->budget.tier = QualityTier::Tier2_Constrained;
+    snap->budget.target_render_hz = 12;
+    vm.onSnapshotPublished(snap);
+    EXPECT_EQ(vm.targetRenderHz(), 12);
+
+    auto snapHigh = std::make_shared<OrganismSnapshot>();
+    snapHigh->budget.target_render_hz = 240;
+    vm.onSnapshotPublished(snapHigh);
+    EXPECT_EQ(vm.targetRenderHz(), static_cast<int>(prometheus::common::ComputeBudget::HARD_MAX_RENDER_HZ));
+}
+
+TEST(OrganismViewModelTest, ViewModelStepsLocomotionAndHaltsOnDormancy) {
+    OrganismViewModel vm(false, QString());
+    vm.onSnapshotPublished(makeSnapshot(Behaviour::Exploring, QualityTier::Tier4_Optimal, 0.10f));
+
+    QSignalSpy locoSpy(&vm, &OrganismViewModel::locomotionChanged);
+    float winX = 600.0f;
+    bool walked = false;
+    for (int i = 0; i < 400; ++i) {
+        const bool moved = vm.stepLocomotionWithCursor(
+            1.0f / 60.0f, winX, 400.0f, 280.0f, 300.0f, 185.0f,
+            0.0f, 0.0f, 1920.0f, 1040.0f, false, false,
+            0.0f, 0.0f, false);
+        if (moved) winX = vm.targetWindowX();
+        if (vm.isWalking() && vm.walkIntensity() > 0.1f) {
+            walked = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(walked);
+    EXPECT_GT(locoSpy.count(), 0);
+    EXPECT_EQ(vm.locomotionMode(), QStringLiteral("ExplorePatrol"));
+    EXPECT_TRUE(vm.locomotionNeedsTick());
+
+    // Dormant snapshot immediately resets locomotion state
+    vm.onSnapshotPublished(makeSnapshot(Behaviour::Dormant, QualityTier::Tier0_Dormant, 0.90f, true));
+    EXPECT_FALSE(vm.isWalking());
+    EXPECT_FLOAT_EQ(vm.walkIntensity(), 0.0f);
+    EXPECT_FALSE(vm.locomotionNeedsTick());
+    EXPECT_EQ(vm.locomotionMode(), QStringLiteral("Stationary"));
+}
+
 } // namespace
