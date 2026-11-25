@@ -1,25 +1,30 @@
 import QtQuick
-import QtQuick
 import QtQuick.Window
 
 /**
  * PROMETHEUS – Main organism window
  *
- * The organism body is now the cat SVG asset.
+ * The organism body is the cat SVG asset.
  * All behaviour-driven animations are applied via QML properties layered
  * on top of the image — no SMIL animation required from the SVG itself.
  *
  * Visual mapping:
  *   Body size       ← energy       (larger = more energetic)
  *   Body opacity    ← health       (dimmer = damaged)
- *   Hue rotation    ← behaviour    (colour shift per state)
+ *   Hue tint        ← behaviour    (colour shift per state)
  *   Stress ring     ← stress       (pulsing halo)
  *   Particle dots   ← activeParticles (orbiting dots)
  *   Adaptation glow ← adaptation   (golden outer ring)
  *   Dormancy        ← dormant      (shrinks, greyscale, slow breathing)
  *   Bounce anim     ← curiosity    (subtle bounce when curious)
  *
- * Press D to toggle the developer diagnostics panel.
+ *   === Mate-Engine animation system (Phase 1–4) ===
+ *   animState       ← Behaviour × QualityTier  (body posture / scale / rotation)
+ *   animPulse       ← pressure spike           (flinch burst — analog: BPM spike)
+ *   isDragging      ← mouse drag               (tilt + float — analog: drag/drop state)
+ *   idle sub-cycle  ← timer-driven QML         (random stretch + head-tilt)
+ *
+ * Press D (or right-click) to toggle the developer diagnostics panel.
  * SYNTHETIC badge shown when syntheticMode == true (REQ-UI-02).
  */
 Window {
@@ -42,6 +47,10 @@ Window {
     // ---- Focus item — keyboard events need an Item with focus, not Window ----
     property bool showDiag: false
 
+    // ---- Drag state (Phase 3 — Mate-Engine drag/drop interaction analog) ----
+    // Tracked purely in QML; drives AnimationLayer.dragging.
+    property bool isDragging: false
+
     Item {
         id: keyHandler
         anchors.fill: parent
@@ -62,11 +71,13 @@ Window {
 
         onPressed: (m) => {
             startPos = Qt.point(m.x, m.y)
-            root.requestActivate()     // bring window to front
-            keyHandler.forceActiveFocus()  // grab keyboard focus
+            root.requestActivate()
+            keyHandler.forceActiveFocus()
             if (m.button === Qt.RightButton) {
                 root.showDiag = !root.showDiag
                 m.accepted = true
+            } else {
+                root.isDragging = true   // Phase 3: enter drag animation state
             }
         }
         onPositionChanged: (m) => {
@@ -75,6 +86,8 @@ Window {
                 root.y += m.y - startPos.y
             }
         }
+        onReleased: root.isDragging = false
+        onCanceled: root.isDragging = false
     }
 
     // ================================================================
@@ -103,10 +116,14 @@ Window {
         radius: width / 2
         color: "transparent"
         border.color: Qt.rgba(1.0, 0.2, 0.05, vm.stress * 0.75)
-        border.width: 2 + vm.stress * 5
+
+        property real flareExtra: 0.0
+        border.width: 2 + vm.stress * 5 + flareExtra
         visible: vm.stress > 0.10
 
+        // Pulse speed tied to stress; frenetic when high (dormancy: very slow)
         SequentialAnimation on opacity {
+            running: pulseRing.visible
             loops: Animation.Infinite
             NumberAnimation {
                 to: 0.1
@@ -117,6 +134,47 @@ Window {
                 to: 1.0
                 duration: vm.dormant ? 4000 : (400 + (1.0 - vm.stress) * 700)
                 easing.type: Easing.InOutSine
+            }
+        }
+
+        // Phase 2 — Flinch flare: stress ring briefly flares on pressure pulse
+        property real _flarePeak: 0.0
+        SequentialAnimation {
+            id: stressFlare
+            running: false
+            NumberAnimation {
+                target: pulseRing
+                property: "flareExtra"
+                to: pulseRing._flarePeak
+                duration: 80
+                easing.type: Easing.OutQuad
+            }
+            NumberAnimation {
+                target: pulseRing
+                property: "flareExtra"
+                to: 0.0
+                duration: 400
+                easing.type: Easing.InSine
+            }
+            onRunningChanged: if (!running) pulseRing._flarePeak = 0.0
+        }
+
+        Connections {
+            target: vm
+            function onSnapshotChanged() {
+                if (vm.dormant || vm.stress <= 0.1) {
+                    stressFlare.stop()
+                    pulseRing.flareExtra = 0.0
+                    pulseRing._flarePeak = 0.0
+                    return
+                }
+                if (vm.animPulse > 0.3) {
+                    const nextPeak = vm.animPulse * 8.0
+                    if (!stressFlare.running || nextPeak > pulseRing._flarePeak) {
+                        pulseRing._flarePeak = nextPeak
+                        stressFlare.restart()
+                    }
+                }
             }
         }
     }
@@ -161,16 +219,21 @@ Window {
             }
         }
 
-        // Orbit rotation — speed driven by curiosity and tier
-        NumberAnimation on rotation {
-            from: 0; to: 360; loops: Animation.Infinite
-            duration: vm.dormant ? 999999
-                : Math.max(4000, 18000 - vm.curiosity * 12000 - vm.qualityTier * 1000)
+        // Orbit rotation — speed driven by curiosity and tier.
+        // Phase 3: smoothly reverses direction from current angle while dragging.
+        FrameAnimation {
+            running: !vm.dormant && particleField.visibleDots > 0
+            onTriggered: {
+                const durSec = Math.max(4.0, 18.0 - vm.curiosity * 12.0 - vm.qualityTier * 1.0)
+                const dir = root.isDragging ? -1.0 : 1.0
+                const step = dir * (360.0 / durSec) * Math.min(frameTime, 0.1)
+                particleField.rotation = (particleField.rotation + step + 360.0) % 360.0
+            }
         }
     }
 
     // ================================================================
-    //  LAYER 4 — The cat SVG organism body
+    //  LAYER 4 — The cat SVG organism body + AnimationLayer
     // ================================================================
     Item {
         id: catBody
@@ -198,6 +261,18 @@ Window {
             : (0.55 + vm.health * 0.45)
         Behavior on opacity { NumberAnimation { duration: 600 } }
 
+        // ---- AnimationLayer (Phase 1–4) ----
+        // Owns all transform outputs (scale, rotation, y-offset via Translate)
+        // so catBody never has competing animations overriding bindings.
+        AnimationLayer {
+            id: anim
+            dragging: root.isDragging
+        }
+
+        scale:     anim.bodyScale
+        rotation:  anim.bodyRotation
+        transform: Translate { y: anim.bodyYOffset }
+
         // Greyscale filter when dormant using saturation = 0
         layer.enabled:  vm.dormant
         layer.effect: ShaderEffect {
@@ -221,8 +296,6 @@ Window {
             fillMode: Image.PreserveAspectFit
             smooth: true
             antialiasing: true
-
-            // Colour tint overlay driven by behaviour (using Item + Rectangle blend)
         }
 
         // Behaviour colour tint (semi-transparent overlay blended on top)
@@ -241,23 +314,6 @@ Window {
             }
             Behavior on color   { ColorAnimation { duration: 500 } }
             Behavior on opacity { NumberAnimation { duration: 400 } }
-        }
-
-        // Curious bounce animation
-        SequentialAnimation on y {
-            running: vm.curiosity > 0.65 && !vm.dormant
-            loops: Animation.Infinite
-            NumberAnimation { to: -6; duration: 350; easing.type: Easing.OutQuad }
-            NumberAnimation { to:  0; duration: 350; easing.type: Easing.InQuad }
-            PauseAnimation   { duration: Math.max(200, 1200 - vm.curiosity * 1000) }
-        }
-
-        // Dormancy slow breathing scale
-        SequentialAnimation on scale {
-            running: vm.dormant
-            loops: Animation.Infinite
-            NumberAnimation { to: 0.95; duration: 2500; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 1.00; duration: 2500; easing.type: Easing.InOutSine }
         }
     }
 
@@ -322,7 +378,7 @@ Window {
     }
 
     // ================================================================
-    //  LAYER 8 — Developer diagnostics panel (press D)
+    //  LAYER 8 — Developer diagnostics panel (press D or right-click)
     // ================================================================
     Rectangle {
         visible: root.showDiag
@@ -345,6 +401,29 @@ Window {
             Text { text: "Adapt     " + (vm.adaptation* 100).toFixed(1) + "%"; font.pixelSize: 9; color: "white" }
             Text { text: "Behaviour " + vm.behaviour;                          font.pixelSize: 9; color: "#ffdd88" }
             Text { text: "Tier      " + vm.qualityTier;                        font.pixelSize: 9; color: "white" }
+
+            // ---- Animation state diagnostics (Phase 1) ----
+            Text { text: "── ANIMATION ──"; font.pixelSize: 9; font.bold: true; color: "#aaddff"; topPadding: 4 }
+            Text {
+                text: "AnimState " + vm.animState
+                font.pixelSize: 9
+                color: "#88ddff"
+            }
+            Text {
+                text: "Pulse     " + (vm.animPulse * 100).toFixed(0) + "%"
+                font.pixelSize: 9
+                color: vm.animPulse > 0.3 ? "#ff8844" : "white"
+            }
+            Text {
+                text: "Dragging  " + (root.isDragging ? "YES" : "no")
+                font.pixelSize: 9
+                color: root.isDragging ? "#ffdd44" : "white"
+            }
+            Text {
+                text: "XFade     " + anim.xfadeDuration + "ms"
+                font.pixelSize: 9
+                color: "white"
+            }
 
             Text { text: "── HOST ──"; font.pixelSize: 9; font.bold: true; color: "#aaaaff"; topPadding: 4 }
             Text { text: "CPU  " + (vm.hostCpuValid ? vm.hostCpuPct.toFixed(1) + "%" : "N/A"); font.pixelSize: 9; color: vm.hostCpuValid ? "white" : "#ff8888" }
