@@ -1,13 +1,87 @@
 #include "prometheus/ui/OrganismViewModel.hpp"
+#include <QFileInfo>
 #include <QMetaType>
+#include <QSettings>
+#include <QUrl>
+#include <QVariantMap>
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <memory>
 
 Q_DECLARE_METATYPE(std::shared_ptr<const prometheus::common::OrganismSnapshot>)
 
 namespace prometheus::ui {
 
 namespace {
+
+struct CharacterPreset {
+    const char* id;
+    const char* name;
+    const char* tagline;
+    const char* source;
+    const char* accent;
+};
+
+constexpr std::array<CharacterPreset, 5> kBuiltInCharacters{{
+    {"cat",   "Ember Cat",  "Classic solar feline",   "qrc:/Prometheus/resources/organism.svg",            "#ff8844"},
+    {"owl",   "Aegis Owl",  "Nocturnal sentinel",     "qrc:/Prometheus/resources/characters/owl.svg",      "#ffd55a"},
+    {"fox",   "Spark Fox",  "Agile ember spirit",     "qrc:/Prometheus/resources/characters/fox.svg",      "#ff6b2b"},
+    {"bot",   "Atlas Bot",  "Cyber telemetry unit",   "qrc:/Prometheus/resources/characters/bot.svg",      "#33d6ff"},
+    {"slime", "Nova Slime", "Bioluminescent cell",    "qrc:/Prometheus/resources/characters/slime.svg",    "#2ee6c5"},
+}};
+
+const CharacterPreset* findPreset(const QString& id) noexcept {
+    for (const auto& c : kBuiltInCharacters) {
+        if (id == QLatin1String(c.id)) {
+            return &c;
+        }
+    }
+    return nullptr;
+}
+
+bool isValidCustomImageFile(const QString& filePathOrUrl, QString& normalizedLocalPath) {
+    QString localPath = filePathOrUrl.trimmed();
+    if (localPath.isEmpty()) return false;
+
+    const QUrl url(localPath);
+    if (url.isValid() && !url.scheme().isEmpty()) {
+        // Only local file:// URLs are permitted (never http/https/etc., and reject single-letter drive schemes).
+        if (url.isLocalFile()) {
+            localPath = url.toLocalFile();
+        } else if (url.scheme().size() > 1) {
+            return false;
+        }
+    }
+
+    const QFileInfo fi(localPath);
+    if (!fi.exists() || !fi.isFile()) return false;
+
+    const QString ext = fi.suffix().toLower();
+    if (ext != QLatin1String("svg") &&
+        ext != QLatin1String("png") &&
+        ext != QLatin1String("jpg") &&
+        ext != QLatin1String("jpeg") &&
+        ext != QLatin1String("webp") &&
+        ext != QLatin1String("gif") &&
+        ext != QLatin1String("bmp")) {
+        return false;
+    }
+
+    normalizedLocalPath = fi.canonicalFilePath();
+    if (normalizedLocalPath.isEmpty()) {
+        normalizedLocalPath = fi.absoluteFilePath();
+    }
+    return true;
+}
+
+std::unique_ptr<QSettings> makeSettings(const QString& settingsFilePath) {
+    if (!settingsFilePath.isEmpty()) {
+        return std::make_unique<QSettings>(settingsFilePath, QSettings::IniFormat);
+    }
+    return std::make_unique<QSettings>(
+        QStringLiteral("Prometheus"), QStringLiteral("PrometheusDesktop"));
+}
 
 QString behaviourToString(common::Behaviour b) noexcept {
     switch (b) {
@@ -88,10 +162,49 @@ float computeAnimPulse(float currentPressure,
 } // namespace
 
 OrganismViewModel::OrganismViewModel(QObject* parent)
+    : OrganismViewModel(true, QString(), parent)
+{}
+
+OrganismViewModel::OrganismViewModel(
+    bool enablePersistence,
+    const QString& settingsFilePath,
+    QObject* parent)
     : QObject(parent)
     , snapshot_(std::make_shared<const common::OrganismSnapshot>())
+    , persistenceEnabled_(enablePersistence)
+    , settingsFilePath_(settingsFilePath)
 {
     qRegisterMetaType<std::shared_ptr<const common::OrganismSnapshot>>();
+    if (persistenceEnabled_) {
+        loadCharacterPreference();
+    }
+}
+
+void OrganismViewModel::loadCharacterPreference() {
+    const auto settings = makeSettings(settingsFilePath_);
+    const QString savedId = settings->value(QStringLiteral("ui/characterId"), QStringLiteral("cat")).toString();
+    const QString savedCustom = settings->value(QStringLiteral("ui/customCharacterPath")).toString();
+
+    QString normalizedCustom;
+    if (!savedCustom.isEmpty() && isValidCustomImageFile(savedCustom, normalizedCustom)) {
+        customCharacterPath_ = normalizedCustom;
+    }
+
+    if (savedId == QLatin1String("custom") && !customCharacterPath_.isEmpty()) {
+        characterId_ = QStringLiteral("custom");
+    } else if (findPreset(savedId) != nullptr) {
+        characterId_ = savedId;
+    } else {
+        characterId_ = QStringLiteral("cat");
+    }
+}
+
+void OrganismViewModel::saveCharacterPreference() const {
+    if (!persistenceEnabled_) return;
+    const auto settings = makeSettings(settingsFilePath_);
+    settings->setValue(QStringLiteral("ui/characterId"), characterId_);
+    settings->setValue(QStringLiteral("ui/customCharacterPath"), customCharacterPath_);
+    settings->sync();
 }
 
 void OrganismViewModel::onSnapshotPublished(
@@ -170,6 +283,107 @@ QString OrganismViewModel::animState() const noexcept {
 
 float OrganismViewModel::animPulse() const noexcept {
     return animPulse_;
+}
+
+// ---- Character / avatar selection ----
+QString OrganismViewModel::characterId() const noexcept {
+    return characterId_;
+}
+
+QString OrganismViewModel::characterName() const {
+    if (characterId_ == QLatin1String("custom") && !customCharacterPath_.isEmpty()) {
+        const QString base = QFileInfo(customCharacterPath_).completeBaseName();
+        return base.isEmpty() ? QStringLiteral("Custom") : base;
+    }
+    if (const auto* preset = findPreset(characterId_)) {
+        return QString::fromUtf8(preset->name);
+    }
+    return QStringLiteral("Ember Cat");
+}
+
+QString OrganismViewModel::characterSource() const {
+    if (characterId_ == QLatin1String("custom") && !customCharacterPath_.isEmpty()) {
+        return QUrl::fromLocalFile(customCharacterPath_).toString();
+    }
+    if (const auto* preset = findPreset(characterId_)) {
+        return QString::fromUtf8(preset->source);
+    }
+    return QStringLiteral("qrc:/Prometheus/resources/organism.svg");
+}
+
+QString OrganismViewModel::characterAccent() const {
+    if (characterId_ == QLatin1String("custom")) {
+        return QStringLiteral("#c084fc");
+    }
+    if (const auto* preset = findPreset(characterId_)) {
+        return QString::fromUtf8(preset->accent);
+    }
+    return QStringLiteral("#ff8844");
+}
+
+QString OrganismViewModel::customCharacterPath() const noexcept {
+    return customCharacterPath_;
+}
+
+QString OrganismViewModel::customCharacterSource() const {
+    if (customCharacterPath_.isEmpty()) return QString();
+    return QUrl::fromLocalFile(customCharacterPath_).toString();
+}
+
+QVariantList OrganismViewModel::availableCharacters() const {
+    QVariantList list;
+    list.reserve(static_cast<qsizetype>(kBuiltInCharacters.size()));
+    for (const auto& c : kBuiltInCharacters) {
+        QVariantMap entry;
+        entry.insert(QStringLiteral("id"), QString::fromUtf8(c.id));
+        entry.insert(QStringLiteral("name"), QString::fromUtf8(c.name));
+        entry.insert(QStringLiteral("tagline"), QString::fromUtf8(c.tagline));
+        entry.insert(QStringLiteral("source"), QString::fromUtf8(c.source));
+        entry.insert(QStringLiteral("accent"), QString::fromUtf8(c.accent));
+        list.append(entry);
+    }
+    return list;
+}
+
+bool OrganismViewModel::selectCharacter(const QString& characterId) {
+    if (characterId == QLatin1String("custom")) {
+        QString normalized;
+        if (customCharacterPath_.isEmpty() || !isValidCustomImageFile(customCharacterPath_, normalized)) {
+            return false;
+        }
+        if (characterId_ != QLatin1String("custom") || customCharacterPath_ != normalized) {
+            characterId_ = QStringLiteral("custom");
+            customCharacterPath_ = normalized;
+            saveCharacterPreference();
+            emit characterChanged();
+        }
+        return true;
+    }
+
+    if (findPreset(characterId) == nullptr) {
+        return false;
+    }
+    if (characterId_ != characterId) {
+        characterId_ = characterId;
+        saveCharacterPreference();
+        emit characterChanged();
+    }
+    return true;
+}
+
+bool OrganismViewModel::selectCustomCharacter(const QString& filePathOrUrl) {
+    QString normalized;
+    if (!isValidCustomImageFile(filePathOrUrl, normalized)) {
+        return false;
+    }
+    const bool changed = (characterId_ != QLatin1String("custom")) || (customCharacterPath_ != normalized);
+    characterId_ = QStringLiteral("custom");
+    customCharacterPath_ = normalized;
+    if (changed) {
+        saveCharacterPreference();
+        emit characterChanged();
+    }
+    return true;
 }
 
 } // namespace prometheus::ui

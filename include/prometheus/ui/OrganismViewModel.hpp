@@ -3,6 +3,7 @@
 #include "prometheus/common/OrganismSnapshot.hpp"
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 #include <memory>
 
 namespace prometheus::ui {
@@ -14,10 +15,10 @@ namespace prometheus::ui {
  * queued signal (never a direct call — REQ-UI-01). Exposes read-only
  * Q_PROPERTYs to QML. QML never touches simulation objects or Windows handles.
  *
- * Animation properties (animState, animPulse) are view-layer derived values
- * computed inside the ViewModel from snapshot data. They do NOT affect
- * OrganismState or any simulation contract — they are purely presentational.
- * Inspired by Mate-Engine's AvatarAnimatorController state mapping.
+ * Animation properties (animState, animPulse) and character selection
+ * (characterId, characterSource, availableCharacters) are view-layer state
+ * inside the UI module. They do NOT affect OrganismState or any simulation
+ * contract — they are purely presentational.
  */
 class OrganismViewModel : public QObject {
     Q_OBJECT
@@ -68,8 +69,20 @@ class OrganismViewModel : public QObject {
     // audio-reactive dance mode (BPM spike → dance, pressure spike → flinch).
     Q_PROPERTY(float animPulse     READ animPulse     NOTIFY snapshotChanged)
 
+    // ---- Character / avatar selection (UI presentation only) ----
+    Q_PROPERTY(QString      characterId         READ characterId         NOTIFY characterChanged)
+    Q_PROPERTY(QString      characterName       READ characterName       NOTIFY characterChanged)
+    Q_PROPERTY(QString      characterSource     READ characterSource     NOTIFY characterChanged)
+    Q_PROPERTY(QString      characterAccent       READ characterAccent       NOTIFY characterChanged)
+    Q_PROPERTY(QString      customCharacterPath   READ customCharacterPath   NOTIFY characterChanged)
+    Q_PROPERTY(QString      customCharacterSource READ customCharacterSource NOTIFY characterChanged)
+    Q_PROPERTY(QVariantList availableCharacters   READ availableCharacters   CONSTANT)
+
 public:
     explicit OrganismViewModel(QObject* parent = nullptr);
+    OrganismViewModel(bool enablePersistence,
+                      const QString& settingsFilePath,
+                      QObject* parent = nullptr);
 
     [[nodiscard]] float   energy()          const noexcept;
     [[nodiscard]] float   stress()          const noexcept;
@@ -91,18 +104,38 @@ public:
     [[nodiscard]] QString animState()       const noexcept;
     [[nodiscard]] float   animPulse()       const noexcept;
 
+    [[nodiscard]] QString      characterId()         const noexcept;
+    [[nodiscard]] QString      characterName()       const;
+    [[nodiscard]] QString      characterSource()     const;
+    [[nodiscard]] QString      characterAccent()       const;
+    [[nodiscard]] QString      customCharacterPath()   const noexcept;
+    [[nodiscard]] QString      customCharacterSource() const;
+    [[nodiscard]] QVariantList availableCharacters()   const;
+
+    Q_INVOKABLE bool selectCharacter(const QString& characterId);
+    Q_INVOKABLE bool selectCustomCharacter(const QString& filePathOrUrl);
+
 public slots:
     void onSnapshotPublished(std::shared_ptr<const common::OrganismSnapshot> snapshot);
 
 signals:
     void snapshotChanged();
+    void characterChanged();
 
 private:
+    void loadCharacterPreference();
+    void saveCharacterPreference() const;
+
     std::shared_ptr<const common::OrganismSnapshot> snapshot_;
     bool  hasBaseline_{false};     // avoids false startup pulse on first snapshot
     float prevPressure_{0.0f};     // previous sanitized pressure for step-jump detection
     float trailingPressure_{0.0f}; // slower trailing baseline for smoothed 30 Hz spikes
     float animPulse_{0.0f};        // cached pulse value updated on each snapshot
+
+    bool    persistenceEnabled_{true};
+    QString settingsFilePath_;
+    QString characterId_{QStringLiteral("cat")};
+    QString customCharacterPath_;
 };
 
 } // namespace prometheus::ui
