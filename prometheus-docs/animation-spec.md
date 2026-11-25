@@ -135,22 +135,46 @@ and `onCanceled`. When dragging (and awake):
 
 ---
 
-## 5. Files Changed
+## 5. Companion Character Selector (`CharacterPanel.qml`)
+
+**Mate-Engine analog:** Built-in / custom avatar selection while preserving the full
+animation pipeline.
+
+- **Built-in presets (`OrganismViewModel::availableCharacters`):**
+  - `cat` — **Ember Cat** (`qrc:/Prometheus/resources/organism.svg`, default)
+  - `owl` — **Aegis Owl** (`qrc:/Prometheus/resources/characters/owl.svg`)
+  - `fox` — **Spark Fox** (`qrc:/Prometheus/resources/characters/fox.svg`)
+  - `bot` — **Atlas Bot** (`qrc:/Prometheus/resources/characters/bot.svg`)
+  - `slime` — **Nova Slime** (`qrc:/Prometheus/resources/characters/slime.svg`)
+- **Custom local asset:** Drag-and-drop a local `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`,
+  `.gif`, or `.bmp` file onto `CharacterPanel.qml` (`selectCustomCharacter`). Remote URLs
+  are rejected; missing custom files fall back to `"cat"` on startup.
+- **Persistence:** Saved via `QSettings` (`ui/characterId`, `ui/customCharacterPath`) in
+  the UI layer only — `MemoryManager` SQLite schema and simulation contracts are untouched.
+- **UX:** Toggle with **`C`** or the hover **`Chars [C]`** pill (or `"Switch Character [C]"`
+  in the diagnostics overlay). Opening the panel expands the window horizontally so the
+  live organism remains visible alongside the character cards.
+
+---
+
+## 6. Files Changed
 
 | File | Change |
 |---|---|
-| `include/prometheus/ui/OrganismViewModel.hpp` | Added `animState`, `animPulse` Q_PROPERTYs; `hasBaseline_`, `prevPressure_`, `trailingPressure_`, `animPulse_` members |
-| `src/ui/OrganismViewModel.cpp` | Implemented `computeAnimState()`, `computeAnimPulse()`, `sanitizeUnitScalar()`, updated `onSnapshotPublished()` |
+| `include/prometheus/ui/OrganismViewModel.hpp` | Added `animState`, `animPulse`, and character selection Q_PROPERTYs / slots |
+| `src/ui/OrganismViewModel.cpp` | Implemented `computeAnimState()`, `computeAnimPulse()`, character presets, custom file validation, and `QSettings` persistence |
 | `resources/qml/AnimationLayer.qml` | **New** — full animation state machine component |
-| `resources/qml/Main.qml` | Integrated `AnimationLayer`, drag state, stress flare, `FrameAnimation` orbit, diag panel update |
-| `CMakeLists.txt` | Registered `resources/qml/AnimationLayer.qml` in `qt_add_qml_module` |
-| `tests/ui/test_organism_viewmodel.cpp` | **New** — GoogleTest unit tests for `animState` and `animPulse` |
+| `resources/qml/CharacterPanel.qml` | **New** — companion character picker panel with live previews and file drop zone |
+| `resources/qml/Main.qml` | Integrated `AnimationLayer`, `CharacterPanel`, drag state, stress flare, `FrameAnimation` orbit, diag panel update |
+| `resources/characters/{owl,fox,bot,slime}.svg` | **New** — built-in vector character assets |
+| `CMakeLists.txt` | Registered `AnimationLayer.qml`, `CharacterPanel.qml`, and character SVGs in `qt_add_qml_module` |
+| `tests/ui/test_organism_viewmodel.cpp` | **New** — GoogleTest unit tests for `animState`, `animPulse`, and character selection/persistence |
 | `tests/CMakeLists.txt` | Added `prometheus_ui_tests` target |
 | `prometheus-docs/animation-spec.md` | **This file** |
 
 ---
 
-## 6. NORTHSTAR Compliance
+## 7. NORTHSTAR Compliance
 
 | Rule | Status |
 |---|---|
