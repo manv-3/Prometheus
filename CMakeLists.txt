@@ -169,8 +169,13 @@ qt_add_qml_module(prometheus_app
     QML_FILES
         resources/qml/Main.qml
         resources/qml/AnimationLayer.qml
+        resources/qml/CharacterPanel.qml
     RESOURCES
         resources/organism.svg
+        resources/characters/owl.svg
+        resources/characters/fox.svg
+        resources/characters/bot.svg
+        resources/characters/slime.svg
 )
 target_include_directories(prometheus_app PRIVATE ${PROMETHEUS_INCLUDE_DIR})
 
